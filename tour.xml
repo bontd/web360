@@ -1,0 +1,44 @@
+<krpano version="1.20.6" title="My 360° Tour">
+
+  <!-- Scene 1 -->
+  <scene name="room1" title="Phòng 1" onstart="lookat(0,0,100);">
+    <image>
+      <sphere url="https://pannellum.org/images/alma.jpg" />
+    </image>
+
+    <!-- Hotspot dẫn qua phòng 2 -->
+    <hotspot
+      name="to_room2"
+      style="hotspot_style"
+      ath="20"
+      atv="5"
+      linkedscene="room2"
+      tooltip="Sang Phòng 2"
+    />
+  </scene>
+
+  <!-- Scene 2 -->
+  <scene name="room2" title="Phòng 2" onstart="lookat(0,0,100);">
+    <image>
+      <sphere url="https://pannellum.org/images/bma-1.jpg" />
+    </image>
+
+    <!-- Hotspot dẫn ngược về phòng 1 -->
+    <hotspot
+      name="to_room1"
+      style="hotspot_style"
+      ath="-30"
+      atv="5"
+      linkedscene="room1"
+      tooltip="Trở lại Phòng 1"
+    />
+  </scene>
+
+  <!-- Style chung cho hotspot -->
+  <style name="hotspot_style"
+         url="%SWFPATH%/skin/hotspot.png"
+         scale="0.5"
+         distorted="false"
+         onclick="loadscene(get(linkedscene), null, MERGE, BLEND(1));" />
+
+</krpano>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Demo Tour 360 Custom Loader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.css">
+  <script src="https://cdn.jsdelivr.net/npm/pannellum@2.5.6/build/pannellum.js"></script>
+  <style>
+    html, body { margin:0; height:100%; overflow:hidden; }
+    #panorama { width:100%; height:100%; background:#000; }
+
+    /* Custom overlay loader */
+    #loader {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: #000;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000;
+      transition: opacity 0.5s ease;
+    }
+    #loader.hidden {
+      opacity: 0; pointer-events: none;
+    }
+
+    /* Modern spinner */
+    .spinner {
+      width: 60px;
+      height: 60px;
+      border: 6px solid rgba(255,255,255,0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="loader"><div class="spinner"></div></div>
+  <div id="panorama"></div>
+
+  <script>
+    const viewer = pannellum.viewer('panorama', {
+      default: {
+        firstScene: 'room1',
+        author: 'Bốn',
+        sceneFadeDuration: 1000,
+        autoLoad: true,
+        showZoomCtrl: false,
+        showFullscreenCtrl: false,
+      },
+      scenes: {
+        room1: {
+          title: "Phòng 1",
+          panorama: "https://pannellum.org/images/alma.jpg",
+          hotSpots: [{
+            pitch: -5,
+            yaw: 0,
+            type: "scene",
+            text: "Sang Phòng 2",
+            sceneId: "room2"
+          }]
+        },
+        room2: {
+          title: "Phòng 2",
+          panorama: "https://pannellum.org/images/bma-1.jpg",
+          hotSpots: [{
+            pitch: 5,
+            yaw: -30,
+            type: "scene",
+            text: "Trở lại Phòng 1",
+            sceneId: "room1"
+          }]
+        }
+      }
+    });
+
+    // Hide loader when scene is ready
+    viewer.on('load', () => {
+      document.getElementById('loader').classList.add('hidden');
+    });
+  </script>
+</body>
+</html>
