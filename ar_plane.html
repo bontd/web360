@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Plane Detection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            touch-action: none;
+        }
+
+        #status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 15px;
+            font-size: 14px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+        }
+
+        #ar-button {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            background: linear-gradient(45deg, #007AFF, #5856D6);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,122,255,0.3);
+            transition: all 0.3s ease;
+        }
+
+        #ar-button:hover {
+            transform: translateX(-50%) scale(1.05);
+            box-shadow: 0 6px 25px rgba(0,122,255,0.4);
+        }
+
+        #ar-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: translateX(-50%);
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            z-index: 1001;
+            text-align: center;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* AR Controls */
+        .ar-control {
+            position: absolute;
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1000;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #reset-button {
+            top: 10px;
+            left: 10px;
+        }
+
+        #mode-button {
+            top: 50px;
+            left: 10px;
+        }
+
+        #placement-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            border: 3px solid #00ff00;
+            border-radius: 50%;
+            z-index: 999;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #placement-indicator.visible {
+            opacity: 1;
+        }
+
+        #placement-indicator.placing {
+            border-color: #ff0000;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        /* Plane visualization */
+        .plane-mesh {
+            position: absolute;
+            background: rgba(0, 255, 0, 0.3);
+            border: 2px solid #00ff00;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            #instructions {
+                font-size: 12px;
+                padding: 12px;
+                bottom: 15px;
+                left: 15px;
+                right: 15px;
+            }
+            
+            #ar-button {
+                bottom: 80px;
+                padding: 12px 24px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <div>Đang khởi tạo AR...</div>
+        </div>
+        <div id="status">Sẵn sàng</div>
+        <button id="ar-button">🚀 Bắt đầu AR</button>
+        <button id="reset-button" class="ar-control" style="display: none;">🔄 Reset</button>
+        <button id="mode-button" class="ar-control" style="display: none;">📏 Scan Mode</button>
+        <div id="placement-indicator"></div>
+        <div id="instructions">
+            🚀 Nhấn "Bắt đầu AR" → 📏 Quét mặt phẳng → 👆 Chạm để đặt model → 🔄 Di chuyển để xem
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.155.0/build/three.module.min.js",
+                "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        
+        let scene, camera, renderer, model;
+        let video, canvas;
+        let isARActive = false;
+        let isScanning = true;
+        let placedModel = null;
+        let detectedPlanes = [];
+        let planeMeshes = [];
+        let referenceSpace = null;
+        let hitTestSource = null;
+        
+        // AR States
+        let arMode = 'scanning'; // scanning, placing, placed
+        
+        // Elements
+        const status = document.getElementById('status');
+        const arButton = document.getElementById('ar-button');
+        const loading = document.getElementById('loading');
+        const resetButton = document.getElementById('reset-button');
+        const modeButton = document.getElementById('mode-button');
+        const placementIndicator = document.getElementById('placement-indicator');
+        const instructions = document.getElementById('instructions');
+
+        // Initialize AR
+        async function initAR() {
+            try {
+                loading.style.display = 'block';
+                status.textContent = 'Đang khởi tạo AR...';
+                
+                // Check WebXR support
+                if (!navigator.xr) {
+                    throw new Error('WebXR không được hỗ trợ');
+                }
+                
+                // Check AR support
+                const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+                if (!isSupported) {
+                    throw new Error('AR không được hỗ trợ trên thiết bị này');
+                }
+                
+                // Start camera
+                await startCamera();
+                
+                // Initialize Three.js scene
+                initThreeJS();
+                
+                // Start AR session
+                await startARSession();
+                
+                loading.style.display = 'none';
+                status.textContent = 'AR đã sẵn sàng - Quét mặt phẳng';
+                instructions.textContent = '📏 Di chuyển camera để quét mặt phẳng';
+                
+            } catch (error) {
+                console.error('AR initialization failed:', error);
+                loading.style.display = 'none';
+                status.textContent = 'Không thể khởi tạo AR: ' + error.message;
+                arButton.disabled = false;
+                arButton.textContent = '🚀 Thử lại';
+            }
+        }
+
+        // Start camera
+        async function startCamera() {
+            const constraints = {
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            };
+            
+            const stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+            
+            return new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    resolve();
+                };
+            });
+        }
+
+        // Initialize Three.js
+        function initThreeJS() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('canvas'),
+                alpha: true,
+                antialias: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            canvas = document.getElementById('canvas');
+        }
+
+        // Start AR Session
+        async function startARSession() {
+            const session = await navigator.xr.requestSession('immersive-ar', {
+                requiredFeatures: ['local', 'hit-test', 'plane-detection'],
+                optionalFeatures: ['dom-overlay'],
+                domOverlay: { root: document.getElementById('container') }
+            });
+            
+            // Set up session
+            await renderer.xr.setSession(session);
+            referenceSpace = await session.requestReferenceSpace('local');
+            
+            // Get hit test source
+            const viewerSpace = await session.requestReferenceSpace('viewer');
+            hitTestSource = await session.requestHitTestSource({ space: viewerSpace });
+            
+            // Handle session end
+            session.addEventListener('end', () => {
+                isARActive = false;
+                status.textContent = 'AR session ended';
+                arButton.style.display = 'block';
+                resetButton.style.display = 'none';
+                modeButton.style.display = 'none';
+            });
+            
+            isARActive = true;
+            arButton.style.display = 'none';
+            resetButton.style.display = 'block';
+            modeButton.style.display = 'block';
+            
+            // Start render loop
+            renderer.setAnimationLoop(render);
+        }
+
+        // Load 3D model
+        async function loadModel() {
+            return new Promise((resolve, reject) => {
+                const loader = new GLTFLoader();
+                loader.load('./tour360/ekana_stadium_low_poly_lucknow_city_game_asset.glb', 
+                    (gltf) => {
+                        model = gltf.scene;
+                        model.scale.set(0.1, 0.1, 0.1);
+                        model.castShadow = true;
+                        model.receiveShadow = true;
+                        resolve(model);
+                    },
+                    (progress) => {
+                        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+                    },
+                    (error) => {
+                        console.error('Error loading model:', error);
+                        reject(error);
+                    }
+                );
+            });
+        }
+
+        // Place model on plane
+        async function placeModel(hitTestResult) {
+            if (!model) {
+                await loadModel();
+            }
+            
+            const hitPose = hitTestResult.getPose(referenceSpace);
+            if (hitPose) {
+                placedModel = model.clone();
+                placedModel.position.setFromMatrixPosition(hitPose.transform.matrix);
+                placedModel.quaternion.setFromRotationMatrix(hitPose.transform.matrix);
+                
+                scene.add(placedModel);
+                
+                arMode = 'placed';
+                status.textContent = 'Model đã được đặt';
+                instructions.textContent = '🔄 Di chuyển camera để xem model từ các góc độ khác nhau';
+                placementIndicator.classList.remove('visible', 'placing');
+                modeButton.textContent = '✅ Model Placed';
+            }
+        }
+
+        // Reset AR
+        function resetAR() {
+            if (placedModel) {
+                scene.remove(placedModel);
+                placedModel = null;
+            }
+            
+            detectedPlanes.forEach(plane => {
+                if (plane.mesh) {
+                    scene.remove(plane.mesh);
+                }
+            });
+            detectedPlanes = [];
+            planeMeshes = [];
+            
+            arMode = 'scanning';
+            status.textContent = 'AR đã sẵn sàng - Quét mặt phẳng';
+            instructions.textContent = '📏 Di chuyển camera để quét mặt phẳng';
+            placementIndicator.classList.remove('visible', 'placing');
+            modeButton.textContent = '📏 Scan Mode';
+        }
+
+        // Render loop
+        function render(timestamp, frame) {
+            if (!isARActive || !frame) return;
+            
+            // Update camera
+            camera.matrixAutoUpdate = false;
+            
+            // Handle hit testing for plane detection
+            if (hitTestSource && arMode === 'scanning') {
+                const hitTestResults = frame.getHitTestResults(hitTestSource);
+                
+                if (hitTestResults.length > 0) {
+                    const hit = hitTestResults[0];
+                    const hitPose = hit.getPose(referenceSpace);
+                    
+                    if (hitPose) {
+                        placementIndicator.classList.add('visible');
+                        
+                        // Handle tap to place
+                        if (arMode === 'scanning') {
+                            placementIndicator.classList.add('placing');
+                        }
+                    }
+                } else {
+                    placementIndicator.classList.remove('visible', 'placing');
+                }
+            }
+            
+            // Render scene
+            renderer.render(scene, camera);
+        }
+
+        // Event listeners
+        arButton.addEventListener('click', initAR);
+        
+        resetButton.addEventListener('click', resetAR);
+        
+        modeButton.addEventListener('click', () => {
+            if (arMode === 'scanning') {
+                status.textContent = 'Chạm vào màn hình để đặt model';
+                instructions.textContent = '👆 Chạm vào vị trí muốn đặt model';
+            }
+        });
+        
+        // Handle tap to place
+        canvas.addEventListener('click', async (e) => {
+            if (!isARActive || arMode !== 'scanning') return;
+            
+            // Simulate hit test for placement
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width * 2 - 1;
+            const y = -(e.clientY - rect.top) / rect.height * 2 + 1;
+            
+            // Create a simple hit test result simulation
+            const hitMatrix = new THREE.Matrix4();
+            hitMatrix.makeTranslation(x * 2, y * 2, -2);
+            
+            const mockHitTestResult = {
+                getPose: () => ({
+                    transform: {
+                        matrix: hitMatrix
+                    }
+                })
+            };
+            
+            await placeModel(mockHitTestResult);
+        });
+        
+        // Touch support
+        canvas.addEventListener('touchstart', async (e) => {
+            if (!isARActive || arMode !== 'scanning') return;
+            e.preventDefault();
+            
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = (touch.clientX - rect.left) / rect.width * 2 - 1;
+            const y = -(touch.clientY - rect.top) / rect.height * 2 + 1;
+            
+            const hitMatrix = new THREE.Matrix4();
+            hitMatrix.makeTranslation(x * 2, y * 2, -2);
+            
+            const mockHitTestResult = {
+                getPose: () => ({
+                    transform: {
+                        matrix: hitMatrix
+                    }
+                })
+            };
+            
+            await placeModel(mockHitTestResult);
+        });
+
+        // Window resize
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+
+        console.log('AR Plane Detection initialized');
+    </script>
+</body>
+</html>
