@@ -188,6 +188,11 @@
                 border-radius: 20px; font-size: 12px; z-index: 1000; cursor: pointer;">
             📷 Camera Mode
         </button>
+        <button id="transparency-btn" style="display: none; position: absolute; top: 10px; left: 140px; 
+                padding: 8px 12px; background: rgba(0,0,0,0.8); color: white; border: none; 
+                border-radius: 20px; font-size: 12px; z-index: 1000; cursor: pointer;">
+            👁️ Opacity
+        </button>
         <div class="touch-control" id="zoom-in">+</div>
         <div class="touch-control" id="zoom-out">−</div>
         <div id="instructions">
@@ -236,12 +241,16 @@
         let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
         let isDeviceOrientationEnabled = false;
 
+        // Model transparency
+        let modelOpacity = 1.0;
+
         const status = document.getElementById('status');
         const arButton = document.getElementById('ar-button');
         const loading = document.getElementById('loading');
         const zoomInBtn = document.getElementById('zoom-in');
         const zoomOutBtn = document.getElementById('zoom-out');
         const toggleModeBtn = document.getElementById('toggle-mode');
+        const transparencyBtn = document.getElementById('transparency-btn');
 
         // Function to reset mouse activity timer
         function resetMouseActivity() {
@@ -276,6 +285,11 @@
                     videoTexture.minFilter = THREE.LinearFilter;
                     videoTexture.magFilter = THREE.LinearFilter;
                     scene.background = videoTexture;
+                    
+                    // Hide background sphere when camera is active
+                    if (backgroundSphere) {
+                        backgroundSphere.visible = false;
+                    }
                     
                     console.log('Camera started successfully');
                 };
@@ -477,6 +491,7 @@
                     isDeviceOrientationEnabled = true;
                     arButton.style.display = 'none';
                     toggleModeBtn.style.display = 'block';
+                    transparencyBtn.style.display = 'block';
                     status.textContent = 'AR Mode Active';
                 } catch (error) {
                     console.error('AR initialization failed:', error);
@@ -507,6 +522,12 @@
                     const loader = new THREE.TextureLoader();
                     const backgroundTexture = loader.load('./tour360/alma.jpg');
                     scene.background = backgroundTexture;
+                    
+                    // Show background sphere
+                    if (backgroundSphere) {
+                        backgroundSphere.visible = true;
+                    }
+                    
                     toggleModeBtn.textContent = '🎨 Preview Mode';
                     status.textContent = 'Preview Mode';
                     isCameraMode = false;
@@ -517,10 +538,41 @@
                         videoTexture.minFilter = THREE.LinearFilter;
                         videoTexture.magFilter = THREE.LinearFilter;
                         scene.background = videoTexture;
+                        
+                        // Hide background sphere
+                        if (backgroundSphere) {
+                            backgroundSphere.visible = false;
+                        }
+                        
                         toggleModeBtn.textContent = '📷 Camera Mode';
                         status.textContent = 'AR Mode Active';
                         isCameraMode = true;
                     }
+                }
+            });
+
+            // Transparency control
+            transparencyBtn.addEventListener('click', () => {
+                // Cycle through opacity levels
+                if (modelOpacity >= 1.0) {
+                    modelOpacity = 0.5;
+                    transparencyBtn.textContent = '👁️ 50%';
+                } else if (modelOpacity >= 0.5) {
+                    modelOpacity = 0.2;
+                    transparencyBtn.textContent = '👁️ 20%';
+                } else {
+                    modelOpacity = 1.0;
+                    transparencyBtn.textContent = '👁️ 100%';
+                }
+                
+                // Apply opacity to model
+                if (model) {
+                    model.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material.transparent = true;
+                            child.material.opacity = modelOpacity;
+                        }
+                    });
                 }
             });
 
@@ -573,7 +625,7 @@
                 console.log('Fallback: Red cube added');
             });
             
-            // Tạo sphere background lớn với texture alma.jpg
+            // Tạo sphere background nhưng ẩn đi khi có camera
             const textureLoader = new THREE.TextureLoader();
             const texture = textureLoader.load('./tour360/alma.jpg');
             
@@ -581,7 +633,9 @@
                 new THREE.SphereGeometry(50, 32, 32),
                 new THREE.MeshBasicMaterial({ 
                     map: texture,
-                    side: THREE.BackSide // Hiển thị mặt trong
+                    side: THREE.BackSide,
+                    transparent: true,
+                    opacity: 0.3 // Làm trong suốt hơn
                 })
             );
             backgroundSphere.position.set(0, 0, 0);
