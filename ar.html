@@ -250,8 +250,19 @@
     </div>
 
     <!-- AR.js -->
-    <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@1c2407b26c61958baa93967b5412487cd94b290b/dist/aframe-master.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threejs-location-only.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threejs.min.js"></script>
+    <script>
+        // Wait for AR.js to load
+        window.addEventListener('load', () => {
+            if (typeof THREEx === 'undefined') {
+                console.error('THREEx not loaded, trying alternative AR.js source');
+                // Load alternative source
+                const script = document.createElement('script');
+                script.src = 'https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threejs-location-only.js';
+                document.head.appendChild(script);
+            }
+        });
+    </script>
     
     <script type="importmap">
         {
@@ -288,6 +299,11 @@
             try {
                 loading.style.display = 'block';
                 status.textContent = 'Đang khởi tạo AR...';
+                
+                // Check if THREEx is available
+                if (typeof THREEx === 'undefined') {
+                    throw new Error('AR.js library chưa được load. Vui lòng refresh trang.');
+                }
                 
                 // Initialize Three.js
                 initThreeJS();
@@ -344,35 +360,63 @@
 
         // Initialize AR.js
         function initARJS() {
-            // Create AR.js source
-            arToolkitSource = new THREEx.ArToolkitSource({
-                sourceType: 'webcam',
-                sourceWidth: 640,
-                sourceHeight: 480,
-                displayWidth: window.innerWidth,
-                displayHeight: window.innerHeight
-            });
+            try {
+                // Create AR.js source
+                arToolkitSource = new THREEx.ArToolkitSource({
+                    sourceType: 'webcam',
+                    sourceWidth: 640,
+                    sourceHeight: 480,
+                    displayWidth: window.innerWidth,
+                    displayHeight: window.innerHeight
+                });
 
-            // Initialize AR.js source
-            arToolkitSource.init(() => {
-                // Set up video element
-                video.srcObject = arToolkitSource.domElement;
+                // Initialize AR.js source
+                arToolkitSource.init(() => {
+                    // Set up video element
+                    video.srcObject = arToolkitSource.domElement;
+                    video.play();
+                    
+                    // Set up AR.js context
+                    arToolkitContext = new THREEx.ArToolkitContext({
+                        cameraParametersUrl: 'https://raw.githack.com/AR-js-org/AR.js/master/data/data/camera_para.dat',
+                        detectionMode: 'mono_and_matrix',
+                        matrixCodeType: '3x3',
+                        debug: false
+                    });
+                    
+                    arToolkitContext.init(() => {
+                        camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+                    });
+                    
+                    // Create marker controls for plane detection
+                    createPlaneMarker();
+                });
+            } catch (error) {
+                console.warn('AR.js initialization failed, using fallback:', error);
+                initARJSFallback();
+            }
+        }
+
+        // Fallback AR without AR.js
+        function initARJSFallback() {
+            // Start camera manually
+            navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: 'environment' } 
+            }).then(stream => {
+                video.srcObject = stream;
                 video.play();
                 
-                // Set up AR.js context
-                arToolkitContext = new THREEx.ArToolkitContext({
-                    cameraParametersUrl: 'https://raw.githack.com/AR-js-org/AR.js/master/data/data/camera_para.dat',
-                    detectionMode: 'mono_and_matrix',
-                    matrixCodeType: '3x3',
-                    debug: false
-                });
+                // Set up simple camera projection
+                camera.aspect = video.videoWidth / video.videoHeight;
+                camera.updateProjectionMatrix();
                 
-                arToolkitContext.init(() => {
-                    camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
-                });
-                
-                // Create marker controls for plane detection
+                // Create simple plane detection
                 createPlaneMarker();
+                
+                console.log('Fallback AR initialized');
+            }).catch(error => {
+                console.error('Camera access failed:', error);
+                throw error;
             });
         }
 
@@ -464,8 +508,8 @@
         function render() {
             if (!isARActive) return;
             
-            // Update AR.js
-            if (arToolkitSource && arToolkitSource.ready) {
+            // Update AR.js if available
+            if (arToolkitSource && arToolkitSource.ready && arToolkitContext) {
                 arToolkitContext.update(arToolkitSource.domElement);
             }
             
@@ -537,6 +581,14 @@
         }
         
         animate();
+        
+        // Debug THREEx availability
+        window.addEventListener('load', () => {
+            console.log('THREEx available:', typeof THREEx !== 'undefined');
+            if (typeof THREEx !== 'undefined') {
+                console.log('THREEx version:', THREEx.version || 'unknown');
+            }
+        });
         
         console.log('AR Plane Detection initialized');
     </script>
