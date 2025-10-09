@@ -249,21 +249,21 @@
         </div>
     </div>
 
-    <!-- AR.js -->
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threejs.min.js"></script>
+    <!-- AR.js with Three.js -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ar.js@1.7.2/three.js/build/ar-threejs.min.js"></script>
     <script>
         // Wait for AR.js to load
         window.addEventListener('load', () => {
-            if (typeof THREEx === 'undefined') {
-                console.error('THREEx not loaded, trying alternative AR.js source');
-                // Load alternative source
-                const script = document.createElement('script');
-                script.src = 'https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threejs-location-only.js';
-                document.head.appendChild(script);
+            console.log('THREEx available:', typeof THREEx !== 'undefined');
+            if (typeof THREEx !== 'undefined') {
+                console.log('AR.js loaded successfully');
+            } else {
+                console.warn('AR.js not loaded');
             }
         });
     </script>
-    
+
     <script type="importmap">
         {
             "imports": {
@@ -300,16 +300,17 @@
                 loading.style.display = 'block';
                 status.textContent = 'Đang khởi tạo AR...';
                 
-                // Check if THREEx is available
-                if (typeof THREEx === 'undefined') {
-                    throw new Error('AR.js library chưa được load. Vui lòng refresh trang.');
-                }
-                
                 // Initialize Three.js
                 initThreeJS();
                 
-                // Initialize AR.js
-                initARJS();
+                // Initialize AR.js if available, otherwise use fallback
+                if (typeof THREEx !== 'undefined') {
+                    console.log('Using AR.js mode');
+                    initARJS();
+                } else {
+                    console.log('AR.js not available, using fallback');
+                    await initCustomAR();
+                }
                 
                 // Load 3D model
                 await loadModel();
@@ -378,7 +379,7 @@
                     
                     // Set up AR.js context
                     arToolkitContext = new THREEx.ArToolkitContext({
-                        cameraParametersUrl: 'https://raw.githack.com/AR-js-org/AR.js/master/data/data/camera_para.dat',
+                        cameraParametersUrl: 'https://cdn.jsdelivr.net/npm/ar.js@1.7.2/data/data/camera_para.dat',
                         detectionMode: 'mono_and_matrix',
                         matrixCodeType: '3x3',
                         debug: false
@@ -388,35 +389,47 @@
                         camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
                     });
                     
-                    // Create marker controls for plane detection
+                    // Create plane detection marker
                     createPlaneMarker();
+                    
+                    console.log('AR.js initialized successfully');
                 });
             } catch (error) {
-                console.warn('AR.js initialization failed, using fallback:', error);
-                initARJSFallback();
+                console.error('AR.js initialization failed:', error);
+                throw error;
             }
         }
 
-        // Fallback AR without AR.js
-        function initARJSFallback() {
-            // Start camera manually
-            navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: 'environment' } 
-            }).then(stream => {
-                video.srcObject = stream;
-                video.play();
-                
-                // Set up simple camera projection
-                camera.aspect = video.videoWidth / video.videoHeight;
-                camera.updateProjectionMatrix();
-                
-                // Create simple plane detection
-                createPlaneMarker();
-                
-                console.log('Fallback AR initialized');
-            }).catch(error => {
-                console.error('Camera access failed:', error);
-                throw error;
+        // Custom AR implementation
+        function initCustomAR() {
+            return new Promise((resolve, reject) => {
+                // Start camera manually
+                navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                }).then(stream => {
+                    video.srcObject = stream;
+                    
+                    video.onloadedmetadata = () => {
+                        video.play();
+                        
+                        // Set up camera projection
+                        camera.aspect = video.videoWidth / video.videoHeight;
+                        camera.updateProjectionMatrix();
+                        
+                        // Create simple plane detection
+                        createPlaneMarker();
+                        
+                        console.log('Custom AR initialized successfully');
+                        resolve();
+                    };
+                }).catch(error => {
+                    console.error('Camera access failed:', error);
+                    reject(error);
+                });
             });
         }
 
@@ -444,17 +457,17 @@
         // Load 3D model
         async function loadModel() {
             return new Promise((resolve, reject) => {
-                const loader = new GLTFLoader();
+            const loader = new GLTFLoader();
                 loader.load('./tour360/ekana_stadium_low_poly_lucknow_city_game_asset.glb', 
                     (gltf) => {
-                        model = gltf.scene;
+                model = gltf.scene;
                         model.scale.set(0.1, 0.1, 0.1);
                         model.castShadow = true;
                         model.receiveShadow = true;
                         resolve(model);
                     },
                     (progress) => {
-                        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+                console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
                     },
                     (error) => {
                         console.error('Error loading model:', error);
@@ -473,13 +486,15 @@
             vector.set(
                 (x / window.innerWidth) * 2 - 1,
                 -(y / window.innerHeight) * 2 + 1,
-                0.5
+                -2 // Place model at a fixed distance
             );
             
             // Create placed model
             placedModel = model.clone();
             placedModel.position.copy(vector);
-            placedModel.position.z = -1;
+            
+            // Add some rotation to make it look better
+            placedModel.rotation.y = Math.PI / 4;
             
             scene.add(placedModel);
             
@@ -537,6 +552,7 @@
             }
         });
         
+        
         // Handle tap to place
         canvas.addEventListener('click', (e) => {
             if (!isARActive || arMode !== 'scanning') return;
@@ -582,15 +598,18 @@
         
         animate();
         
-        // Debug THREEx availability
+        // Debug AR.js availability
         window.addEventListener('load', () => {
             console.log('THREEx available:', typeof THREEx !== 'undefined');
+            console.log('Three.js available:', typeof THREE !== 'undefined');
             if (typeof THREEx !== 'undefined') {
-                console.log('THREEx version:', THREEx.version || 'unknown');
+                console.log('AR.js loaded successfully');
+            } else {
+                console.warn('AR.js not loaded - will use fallback mode');
             }
         });
         
-        console.log('AR Plane Detection initialized');
+        console.log('AR Plane Detection with AR.js initialized');
     </script>
 </body>
 </html>
