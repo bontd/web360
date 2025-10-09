@@ -183,6 +183,11 @@
         </div>
         <div id="status">Sẵn sàng</div>
         <button id="ar-button">🚀 Bắt đầu AR</button>
+        <button id="toggle-mode" style="display: none; position: absolute; top: 10px; left: 10px; 
+                padding: 8px 12px; background: rgba(0,0,0,0.8); color: white; border: none; 
+                border-radius: 20px; font-size: 12px; z-index: 1000; cursor: pointer;">
+            📷 Camera Mode
+        </button>
         <div class="touch-control" id="zoom-in">+</div>
         <div class="touch-control" id="zoom-out">−</div>
         <div id="instructions">
@@ -236,6 +241,7 @@
         const loading = document.getElementById('loading');
         const zoomInBtn = document.getElementById('zoom-in');
         const zoomOutBtn = document.getElementById('zoom-out');
+        const toggleModeBtn = document.getElementById('toggle-mode');
 
         // Function to reset mouse activity timer
         function resetMouseActivity() {
@@ -264,6 +270,13 @@
                     isCameraActive = true;
                     loading.style.display = 'none';
                     status.textContent = 'Camera đã sẵn sàng';
+                    
+                    // Set camera feed as background texture
+                    const videoTexture = new THREE.VideoTexture(video);
+                    videoTexture.minFilter = THREE.LinearFilter;
+                    videoTexture.magFilter = THREE.LinearFilter;
+                    scene.background = videoTexture;
+                    
                     console.log('Camera started successfully');
                 };
                 
@@ -272,8 +285,12 @@
                 loading.style.display = 'none';
                 status.textContent = 'Không thể khởi tạo camera';
                 
-                // Fallback: hiển thị background màu đen
-                video.style.background = '#000';
+                // Fallback: set background texture
+                const loader = new THREE.TextureLoader();
+                const backgroundTexture = loader.load('./tour360/alma.jpg');
+                scene.background = backgroundTexture;
+                
+                console.log('Using fallback background texture');
             }
         }
 
@@ -385,10 +402,10 @@
             video = document.getElementById('video');
             canvas = document.getElementById('canvas');
 
-            // Set background texture từ ảnh alma.jpg
-            const loader = new THREE.TextureLoader();
-            const backgroundTexture = loader.load('./tour360/alma.jpg');
-            scene.background = backgroundTexture;
+            // Không set background texture ngay, sẽ set khi bật camera
+            // const loader = new THREE.TextureLoader();
+            // const backgroundTexture = loader.load('./tour360/alma.jpg');
+            // scene.background = backgroundTexture;
             
             // Simple lighting
             const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
@@ -459,6 +476,7 @@
                     await startCamera();
                     isDeviceOrientationEnabled = true;
                     arButton.style.display = 'none';
+                    toggleModeBtn.style.display = 'block';
                     status.textContent = 'AR Mode Active';
                 } catch (error) {
                     console.error('AR initialization failed:', error);
@@ -479,6 +497,31 @@
                 targetZoom += 0.5;
                 targetZoom = Math.max(0.1, Math.min(1000, targetZoom));
                 resetMouseActivity();
+            });
+
+            // Toggle mode handler
+            let isCameraMode = true;
+            toggleModeBtn.addEventListener('click', () => {
+                if (isCameraMode) {
+                    // Switch to preview mode
+                    const loader = new THREE.TextureLoader();
+                    const backgroundTexture = loader.load('./tour360/alma.jpg');
+                    scene.background = backgroundTexture;
+                    toggleModeBtn.textContent = '🎨 Preview Mode';
+                    status.textContent = 'Preview Mode';
+                    isCameraMode = false;
+                } else {
+                    // Switch back to camera mode
+                    if (video.srcObject) {
+                        const videoTexture = new THREE.VideoTexture(video);
+                        videoTexture.minFilter = THREE.LinearFilter;
+                        videoTexture.magFilter = THREE.LinearFilter;
+                        scene.background = videoTexture;
+                        toggleModeBtn.textContent = '📷 Camera Mode';
+                        status.textContent = 'AR Mode Active';
+                        isCameraMode = true;
+                    }
+                }
             });
 
             // Window resize
@@ -588,15 +631,8 @@
                 backgroundSphere.rotation.x = rotationX * 0.8;
             }
             
-            // Render 3D scene
+            // Render 3D scene (camera feed is now background texture)
             renderer.render(scene, camera);
-            
-            // Overlay camera feed when in AR mode
-            if (isCameraActive && video.videoWidth > 0) {
-                const ctx = canvas.getContext('2d');
-                ctx.globalCompositeOperation = 'source-over';
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            }
         }
 
         
