@@ -9,7 +9,6 @@
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
-            overflow: hidden;
         }
 
         #container {
@@ -93,8 +92,20 @@
         let rotationX = 0, rotationY = 0;
         let targetZoom = 5; // Target zoom distance
         let currentZoom = 5; // Current zoom distance
+        
+        // Auto rotate variables
+        let lastMouseActivity = Date.now();
+        let isAutoRotating = false;
+        const autoRotateDelay = 10000; // 30 giây
+        const autoRotateSpeed = 0.0005; // Tốc độ quay tự động
 
         const status = document.getElementById('status');
+
+        // Function to reset mouse activity timer
+        function resetMouseActivity() {
+            lastMouseActivity = Date.now();
+            isAutoRotating = false; // Dừng auto rotate khi có tương tác
+        }
 
         // Initialize immediately when Three.js loads
         function init() {
@@ -142,10 +153,12 @@
                 isMouseDown = true;
                 mouseX = e.clientX;
                 mouseY = e.clientY;
+                resetMouseActivity(); // Reset timer khi có tương tác
             });
 
             canvas.addEventListener('mouseup', () => {
                 isMouseDown = false;
+                resetMouseActivity(); // Reset timer khi có tương tác
             });
 
             canvas.addEventListener('mousemove', (e) => {
@@ -159,6 +172,7 @@
                     mouseX = e.clientX;
                     mouseY = e.clientY;
                 }
+                resetMouseActivity(); // Reset timer khi có tương tác
             });
 
             // Zoom with mouse wheel - smooth zoom
@@ -171,7 +185,8 @@
                     targetZoom -= zoomSpeed;
                 }
                 // Giới hạn zoom trong khoảng 2-10
-                targetZoom = Math.max(0.1, Math.min(10, targetZoom));
+                targetZoom = Math.max(0.1, Math.min(1000, targetZoom));
+                resetMouseActivity(); // Reset timer khi có tương tác
             });
 
             // Window resize
@@ -196,12 +211,12 @@
             
             // Load GLB model
             const loader = new GLTFLoader();
-            loader.load('./tour360/silksong__hornet_fanart.glb', (gltf) => {
+            loader.load('./tour360/ekana_stadium_low_poly_lucknow_city_game_asset.glb', (gltf) => {
                 model = gltf.scene;
                 
                 // Điều chỉnh kích thước và vị trí
-                model.scale.set(2, 2, 2); // Phóng to model
-                model.position.set(0, -1, 0); // Đặt thấp hơn một chút
+                model.scale.set(0.1, 0.1, 0.1); // Phóng to model
+                model.position.set(0, 0, 0); // Đặt thấp hơn một chút
                 
                 scene.add(model);
                 console.log('GLB model loaded successfully');
@@ -239,30 +254,20 @@
             console.log('Background sphere with alma.jpg added');
         }
 
-        async function startCamera() {
-            console.log('startCamera');
-            
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    } 
-                });
-                
-                video.srcObject = stream;
-                video.play();
-                
-                isCameraActive = true;
-                status.textContent = 'Camera đã khởi động';
-            } catch (error) {
-                console.error('Lỗi camera:', error);
-                status.textContent = 'Không thể truy cập camera';
-            }
-        }
-
         function animate() {
             requestAnimationFrame(animate);
+            
+            // Check for auto rotate activation
+            const currentTime = Date.now();
+            if (currentTime - lastMouseActivity > autoRotateDelay && !isAutoRotating) {
+                isAutoRotating = true;
+                console.log('Auto rotate activated');
+            }
+            
+            // Auto rotate logic
+            if (isAutoRotating) {
+                targetRotationY += autoRotateSpeed; // Quay chậm theo trục Y
+            }
             
             // Smooth rotation - tăng tốc độ để phản hồi nhanh hơn
             rotationX += (targetRotationX - rotationX) * 0.02;

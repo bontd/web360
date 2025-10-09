@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Mobile Experience</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            touch-action: none;
+        }
+
+        #status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 15px;
+            font-size: 14px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+        }
+
+        #ar-button {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            background: linear-gradient(45deg, #007AFF, #5856D6);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,122,255,0.3);
+            transition: all 0.3s ease;
+        }
+
+        #ar-button:hover {
+            transform: translateX(-50%) scale(1.05);
+            box-shadow: 0 6px 25px rgba(0,122,255,0.4);
+        }
+
+        #ar-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: translateX(-50%);
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            z-index: 1001;
+            text-align: center;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Touch controls styling */
+        .touch-control {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.3);
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+        }
+
+        #zoom-in {
+            bottom: 20px;
+            right: 20px;
+        }
+
+        #zoom-out {
+            bottom: 90px;
+            right: 20px;
+        }
+
+        @media (max-width: 768px) {
+            #instructions {
+                font-size: 12px;
+                padding: 12px;
+                bottom: 15px;
+                left: 15px;
+                right: 15px;
+            }
+            
+            #ar-button {
+                bottom: 80px;
+                padding: 12px 24px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div id="loading" style="display: none;">
+            <div class="spinner"></div>
+            <div>Đang khởi tạo AR...</div>
+        </div>
+        <div id="status">Sẵn sàng</div>
+        <button id="ar-button">🚀 Bắt đầu AR</button>
+        <div class="touch-control" id="zoom-in">+</div>
+        <div class="touch-control" id="zoom-out">−</div>
+        <div id="instructions">
+            📱 Chạm và kéo để xoay | 🔍 Sử dụng nút +/- để zoom | 🚀 Nhấn nút AR để bắt đầu
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.155.0/build/three.module.min.js",
+                "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { XRButton } from 'three/addons/webxr/XRButton.js';
+        
+        let scene, camera, renderer, model, backgroundSphere;
+        let video, canvas;
+        let isCameraActive = false;
+        let isMouseDown = false;
+        let mouseX = 0, mouseY = 0;
+        let targetRotationX = 0, targetRotationY = 0;
+        let rotationX = 0, rotationY = 0;
+        let targetZoom = 5;
+        let currentZoom = 5;
+        
+        // Touch controls
+        let touchStartX = 0, touchStartY = 0;
+        let touchCurrentX = 0, touchCurrentY = 0;
+        let isTouching = false;
+        let lastTouchTime = 0;
+        let touchScale = 1;
+        let lastTouchDistance = 0;
+        
+        // Auto rotate variables
+        let lastMouseActivity = Date.now();
+        let isAutoRotating = false;
+        const autoRotateDelay = 10000;
+        const autoRotateSpeed = 0.0005;
+
+        // Device orientation
+        let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
+        let isDeviceOrientationEnabled = false;
+
+        const status = document.getElementById('status');
+        const arButton = document.getElementById('ar-button');
+        const loading = document.getElementById('loading');
+        const zoomInBtn = document.getElementById('zoom-in');
+        const zoomOutBtn = document.getElementById('zoom-out');
+
+        // Function to reset mouse activity timer
+        function resetMouseActivity() {
+            lastMouseActivity = Date.now();
+            isAutoRotating = false;
+        }
+
+        // Start camera function
+        async function startCamera() {
+            try {
+                loading.style.display = 'block';
+                status.textContent = 'Đang khởi tạo camera...';
+                
+                const constraints = {
+                    video: {
+                        facingMode: 'environment', // Sử dụng camera sau
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                video.onloadedmetadata = () => {
+                    isCameraActive = true;
+                    loading.style.display = 'none';
+                    status.textContent = 'Camera đã sẵn sàng';
+                    console.log('Camera started successfully');
+                };
+                
+            } catch (error) {
+                console.error('Camera error:', error);
+                loading.style.display = 'none';
+                status.textContent = 'Không thể khởi tạo camera';
+                
+                // Fallback: hiển thị background màu đen
+                video.style.background = '#000';
+            }
+        }
+
+        // Touch event handlers
+        function handleTouchStart(e) {
+            e.preventDefault();
+            if (e.touches.length === 1) {
+                // Single touch - rotation
+                const touch = e.touches[0];
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
+                touchCurrentX = touch.clientX;
+                touchCurrentY = touch.clientY;
+                isTouching = true;
+                lastTouchTime = Date.now();
+                resetMouseActivity();
+            } else if (e.touches.length === 2) {
+                // Two finger touch - pinch to zoom
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                lastTouchDistance = Math.sqrt(
+                    Math.pow(touch2.clientX - touch1.clientX, 2) +
+                    Math.pow(touch2.clientY - touch1.clientY, 2)
+                );
+            }
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            if (e.touches.length === 1 && isTouching) {
+                // Single touch rotation
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - touchCurrentX;
+                const deltaY = touch.clientY - touchCurrentY;
+                
+                targetRotationY += deltaX * 0.02;
+                targetRotationX += deltaY * 0.02;
+                
+                touchCurrentX = touch.clientX;
+                touchCurrentY = touch.clientY;
+                resetMouseActivity();
+            } else if (e.touches.length === 2) {
+                // Two finger pinch zoom
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const currentDistance = Math.sqrt(
+                    Math.pow(touch2.clientX - touch1.clientX, 2) +
+                    Math.pow(touch2.clientY - touch1.clientY, 2)
+                );
+                
+                if (lastTouchDistance > 0) {
+                    const scale = currentDistance / lastTouchDistance;
+                    targetZoom *= scale;
+                    targetZoom = Math.max(0.1, Math.min(1000, targetZoom));
+                }
+                lastTouchDistance = currentDistance;
+                resetMouseActivity();
+            }
+        }
+
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            if (e.touches.length === 0) {
+                isTouching = false;
+                lastTouchDistance = 0;
+            }
+        }
+
+        // Device orientation handler
+        function handleDeviceOrientation(e) {
+            if (!isDeviceOrientationEnabled) return;
+            
+            deviceOrientation.alpha = e.alpha;
+            deviceOrientation.beta = e.beta;
+            deviceOrientation.gamma = e.gamma;
+            
+            // Convert device orientation to camera rotation
+            const alpha = e.alpha ? THREE.MathUtils.degToRad(e.alpha) : 0;
+            const beta = e.beta ? THREE.MathUtils.degToRad(e.beta) : 0;
+            const gamma = e.gamma ? THREE.MathUtils.degToRad(e.gamma) : 0;
+            
+            targetRotationY = alpha;
+            targetRotationX = beta * 0.5; // Giảm độ nhạy cho trục X
+        }
+
+        // Initialize immediately when Three.js loads
+        function init() {
+            console.log('Starting init function...');
+            
+            // Scene
+            scene = new THREE.Scene();
+            console.log('Scene created');
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, 5); // Nâng camera lên một chút
+            camera.lookAt(0, 0, 0); // Nhìn vào tâm
+            console.log('Camera created');
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('canvas'),
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            console.log('Renderer created');
+
+            // Video element
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+
+            // Set background texture từ ảnh alma.jpg
+            const loader = new THREE.TextureLoader();
+            const backgroundTexture = loader.load('./tour360/alma.jpg');
+            scene.background = backgroundTexture;
+            
+            // Simple lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+            scene.add(ambientLight);
+            console.log('Lighting added');
+
+            // Create building model immediately
+            createBuilding();
+            status.textContent = 'Đang tải model...';
+            console.log('Loading GLB model...');
+
+            // Mouse controls (for desktop)
+            canvas.addEventListener('mousedown', (e) => {
+                isMouseDown = true;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+                resetMouseActivity();
+            });
+
+            canvas.addEventListener('mouseup', () => {
+                isMouseDown = false;
+                resetMouseActivity();
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (isMouseDown) {
+                    const deltaX = e.clientX - mouseX;
+                    const deltaY = e.clientY - mouseY;
+                    
+                    targetRotationY += deltaX * 0.02;
+                    targetRotationX += deltaY * 0.02;
+                    
+                    mouseX = e.clientX;
+                    mouseY = e.clientY;
+                }
+                resetMouseActivity();
+            });
+
+            // Mouse wheel zoom
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomSpeed = 0.5;
+                if (e.deltaY > 0) {
+                    targetZoom += zoomSpeed;
+                } else {
+                    targetZoom -= zoomSpeed;
+                }
+                targetZoom = Math.max(0.1, Math.min(1000, targetZoom));
+                resetMouseActivity();
+            });
+
+            // Touch controls (for mobile)
+            canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+            canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+            canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+            // Device orientation (for mobile AR)
+            if (typeof DeviceOrientationEvent !== 'undefined') {
+                window.addEventListener('deviceorientation', handleDeviceOrientation, true);
+            }
+
+            // AR Button click handler
+            arButton.addEventListener('click', async () => {
+                arButton.disabled = true;
+                arButton.textContent = '🚀 Đang khởi tạo...';
+                
+                try {
+                    await startCamera();
+                    isDeviceOrientationEnabled = true;
+                    arButton.style.display = 'none';
+                    status.textContent = 'AR Mode Active';
+                } catch (error) {
+                    console.error('AR initialization failed:', error);
+                    arButton.disabled = false;
+                    arButton.textContent = '🚀 Thử lại';
+                    status.textContent = 'Không thể khởi tạo AR';
+                }
+            });
+
+            // Zoom button handlers
+            zoomInBtn.addEventListener('click', () => {
+                targetZoom -= 0.5;
+                targetZoom = Math.max(0.1, Math.min(1000, targetZoom));
+                resetMouseActivity();
+            });
+
+            zoomOutBtn.addEventListener('click', () => {
+                targetZoom += 0.5;
+                targetZoom = Math.max(0.1, Math.min(1000, targetZoom));
+                resetMouseActivity();
+            });
+
+            // Window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Start animation loop
+            animate();
+
+            // Start camera after a short delay
+            // setTimeout(startCamera, 1000);
+
+            console.log('init');
+            
+        }
+
+        function createBuilding() {
+            console.log('Loading GLB model...');
+            
+            // Load GLB model
+            const loader = new GLTFLoader();
+            loader.load('./tour360/ekana_stadium_low_poly_lucknow_city_game_asset.glb', (gltf) => {
+                model = gltf.scene;
+                
+                // Điều chỉnh kích thước và vị trí
+                model.scale.set(0.1, 0.1, 0.1); // Phóng to model
+                model.position.set(0, 0, 0); // Đặt thấp hơn một chút
+                
+                scene.add(model);
+                console.log('GLB model loaded successfully');
+                status.textContent = 'Model Hornet đã sẵn sàng';
+            }, (progress) => {
+                console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+                status.textContent = 'Đang tải model... ' + Math.round(progress.loaded / progress.total * 100) + '%';
+            }, (error) => {
+                console.error('Error loading GLB:', error);
+                status.textContent = 'Lỗi tải model';
+                
+                // Fallback: tạo hình vuông đỏ nếu không load được
+                model = new THREE.Mesh(
+                    new THREE.BoxGeometry(2, 2, 2),
+                    new THREE.MeshBasicMaterial({ color: 0xFF0000 })
+                );
+                model.position.set(0, 0, 0);
+                scene.add(model);
+                console.log('Fallback: Red cube added');
+            });
+            
+            // Tạo sphere background lớn với texture alma.jpg
+            const textureLoader = new THREE.TextureLoader();
+            const texture = textureLoader.load('./tour360/alma.jpg');
+            
+            backgroundSphere = new THREE.Mesh(
+                new THREE.SphereGeometry(50, 32, 32),
+                new THREE.MeshBasicMaterial({ 
+                    map: texture,
+                    side: THREE.BackSide // Hiển thị mặt trong
+                })
+            );
+            backgroundSphere.position.set(0, 0, 0);
+            scene.add(backgroundSphere);
+            console.log('Background sphere with alma.jpg added');
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Check for auto rotate activation
+            const currentTime = Date.now();
+            if (currentTime - lastMouseActivity > autoRotateDelay && !isAutoRotating) {
+                isAutoRotating = true;
+                console.log('Auto rotate activated');
+            }
+            
+            // Auto rotate logic (only when not in AR mode)
+            if (isAutoRotating && !isCameraActive) {
+                targetRotationY += autoRotateSpeed;
+            }
+            
+            // Device orientation integration (when enabled)
+            if (isDeviceOrientationEnabled && !isTouching && !isMouseDown) {
+                // Blend device orientation with touch controls
+                targetRotationY += (deviceOrientation.alpha * 0.001) * 0.1;
+                targetRotationX += (deviceOrientation.beta * 0.001) * 0.1;
+            }
+            
+            // Smooth rotation
+            rotationX += (targetRotationX - rotationX) * 0.02;
+            rotationY += (targetRotationY - rotationY) * 0.02;
+            
+            // Smooth zoom
+            currentZoom += (targetZoom - currentZoom) * 0.15;
+            camera.position.z = currentZoom;
+            
+            // Apply rotation to model
+            if (model) {
+                model.rotation.x = rotationX;
+                model.rotation.y = rotationY;
+            }
+            
+            // Rotate background sphere
+            if (backgroundSphere) {
+                backgroundSphere.rotation.y = rotationY * 0.8;
+                backgroundSphere.rotation.x = rotationX * 0.8;
+            }
+            
+            // Render 3D scene
+            renderer.render(scene, camera);
+            
+            // Overlay camera feed when in AR mode
+            if (isCameraActive && video.videoWidth > 0) {
+                const ctx = canvas.getContext('2d');
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        
+        // Initialize immediately since THREE is imported
+        console.log('Three.js imported successfully');
+        init();
+    </script>
+</body>
+</html>
