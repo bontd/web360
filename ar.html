@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Mobile Experience</title>
+    <title>AR Plane Detection Experience</title>
     <style>
         * {
             margin: 0;
@@ -156,6 +156,62 @@
             right: 20px;
         }
 
+        /* AR Plane Detection Styles */
+        #placement-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            border: 3px solid #00ff00;
+            border-radius: 50%;
+            z-index: 999;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #placement-indicator.visible {
+            opacity: 1;
+        }
+
+        #placement-indicator.placing {
+            border-color: #ff0000;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.2); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        /* AR Controls */
+        .ar-control {
+            position: absolute;
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            border: none;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1000;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #reset-button {
+            top: 10px;
+            left: 10px;
+        }
+
+        #scan-button {
+            top: 50px;
+            left: 10px;
+        }
+
         @media (max-width: 768px) {
             #instructions {
                 font-size: 12px;
@@ -183,23 +239,20 @@
         </div>
         <div id="status">Sẵn sàng</div>
         <button id="ar-button">🚀 Bắt đầu AR</button>
-        <button id="toggle-mode" style="display: none; position: absolute; top: 10px; left: 10px; 
-                padding: 8px 12px; background: rgba(0,0,0,0.8); color: white; border: none; 
-                border-radius: 20px; font-size: 12px; z-index: 1000; cursor: pointer;">
-            📷 Camera Mode
-        </button>
-        <button id="transparency-btn" style="display: none; position: absolute; top: 10px; left: 140px; 
-                padding: 8px 12px; background: rgba(0,0,0,0.8); color: white; border: none; 
-                border-radius: 20px; font-size: 12px; z-index: 1000; cursor: pointer;">
-            👁️ Opacity
-        </button>
-        <div class="touch-control" id="zoom-in">+</div>
-        <div class="touch-control" id="zoom-out">−</div>
+        <button id="reset-button" class="ar-control" style="display: none;">🔄 Reset</button>
+        <button id="scan-button" class="ar-control" style="display: none;">📏 Scan Mode</button>
+        <div id="placement-indicator"></div>
+        <div class="touch-control" id="zoom-in" style="display: none;">+</div>
+        <div class="touch-control" id="zoom-out" style="display: none;">−</div>
         <div id="instructions">
-            📱 Chạm và kéo để xoay | 🔍 Sử dụng nút +/- để zoom | 🚀 Nhấn nút AR để bắt đầu
+            🚀 Nhấn "Bắt đầu AR" → 📏 Quét mặt phẳng → 👆 Chạm để đặt model → 🔄 Di chuyển để xem
         </div>
     </div>
 
+    <!-- AR.js -->
+    <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@1c2407b26c61958baa93967b5412487cd94b290b/dist/aframe-master.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threejs-location-only.js"></script>
+    
     <script type="importmap">
         {
             "imports": {
@@ -211,488 +264,281 @@
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { XRButton } from 'three/addons/webxr/XRButton.js';
         
-        let scene, camera, renderer, model, backgroundSphere;
+        let scene, camera, renderer, model, placedModel;
         let video, canvas;
-        let isCameraActive = false;
-        let isMouseDown = false;
-        let mouseX = 0, mouseY = 0;
-        let targetRotationX = 0, targetRotationY = 0;
-        let rotationX = 0, rotationY = 0;
-        let targetZoom = 5;
-        let currentZoom = 5;
+        let isARActive = false;
+        let isScanning = true;
+        let arMode = 'scanning'; // scanning, placing, placed
         
-        // Touch controls
-        let touchStartX = 0, touchStartY = 0;
-        let touchCurrentX = 0, touchCurrentY = 0;
-        let isTouching = false;
-        let lastTouchTime = 0;
-        let touchScale = 1;
-        let lastTouchDistance = 0;
+        // AR.js integration
+        let arToolkitSource, arToolkitContext, arMarkerControls;
         
-        // Auto rotate variables
-        let lastMouseActivity = Date.now();
-        let isAutoRotating = false;
-        const autoRotateDelay = 10000;
-        const autoRotateSpeed = 0.0005;
-
-        // Device orientation
-        let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
-        let isDeviceOrientationEnabled = false;
-
-        // Model transparency
-        let modelOpacity = 1.0;
-
+        // Elements
         const status = document.getElementById('status');
         const arButton = document.getElementById('ar-button');
         const loading = document.getElementById('loading');
-        const zoomInBtn = document.getElementById('zoom-in');
-        const zoomOutBtn = document.getElementById('zoom-out');
-        const toggleModeBtn = document.getElementById('toggle-mode');
-        const transparencyBtn = document.getElementById('transparency-btn');
+        const resetButton = document.getElementById('reset-button');
+        const scanButton = document.getElementById('scan-button');
+        const placementIndicator = document.getElementById('placement-indicator');
+        const instructions = document.getElementById('instructions');
 
-        // Function to reset mouse activity timer
-        function resetMouseActivity() {
-            lastMouseActivity = Date.now();
-            isAutoRotating = false;
-        }
-
-        // Start camera function
-        async function startCamera() {
+        // Initialize AR with AR.js
+        async function initAR() {
             try {
                 loading.style.display = 'block';
-                status.textContent = 'Đang khởi tạo camera...';
+                status.textContent = 'Đang khởi tạo AR...';
                 
-                const constraints = {
-                    video: {
-                        facingMode: 'environment', // Sử dụng camera sau
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    }
-                };
+                // Initialize Three.js
+                initThreeJS();
                 
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = stream;
+                // Initialize AR.js
+                initARJS();
                 
-                video.onloadedmetadata = () => {
-                    isCameraActive = true;
-                    loading.style.display = 'none';
-                    status.textContent = 'Camera đã sẵn sàng';
-                    
-                    // Set camera feed as background texture
-                    const videoTexture = new THREE.VideoTexture(video);
-                    videoTexture.minFilter = THREE.LinearFilter;
-                    videoTexture.magFilter = THREE.LinearFilter;
-                    scene.background = videoTexture;
-                    
-                    // Hide background sphere when camera is active
-                    if (backgroundSphere) {
-                        backgroundSphere.visible = false;
-                    }
-                    
-                    console.log('Camera started successfully');
-                };
+                // Load 3D model
+                await loadModel();
+                
+                loading.style.display = 'none';
+                status.textContent = 'AR đã sẵn sàng - Quét mặt phẳng';
+                instructions.textContent = '📏 Di chuyển camera để quét mặt phẳng';
+                
+                isARActive = true;
+                arButton.style.display = 'none';
+                resetButton.style.display = 'block';
+                scanButton.style.display = 'block';
                 
             } catch (error) {
-                console.error('Camera error:', error);
+                console.error('AR initialization failed:', error);
                 loading.style.display = 'none';
-                status.textContent = 'Không thể khởi tạo camera';
-                
-                // Fallback: set background texture
-                const loader = new THREE.TextureLoader();
-                const backgroundTexture = loader.load('./tour360/alma.jpg');
-                scene.background = backgroundTexture;
-                
-                console.log('Using fallback background texture');
+                status.textContent = 'Không thể khởi tạo AR: ' + error.message;
+                arButton.disabled = false;
+                arButton.textContent = '🚀 Thử lại';
             }
         }
 
-        // Touch event handlers
-        function handleTouchStart(e) {
-            e.preventDefault();
-            if (e.touches.length === 1) {
-                // Single touch - rotation
-                const touch = e.touches[0];
-                touchStartX = touch.clientX;
-                touchStartY = touch.clientY;
-                touchCurrentX = touch.clientX;
-                touchCurrentY = touch.clientY;
-                isTouching = true;
-                lastTouchTime = Date.now();
-                resetMouseActivity();
-            } else if (e.touches.length === 2) {
-                // Two finger touch - pinch to zoom
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
-                lastTouchDistance = Math.sqrt(
-                    Math.pow(touch2.clientX - touch1.clientX, 2) +
-                    Math.pow(touch2.clientY - touch1.clientY, 2)
-                );
-            }
-        }
-
-        function handleTouchMove(e) {
-            e.preventDefault();
-            if (e.touches.length === 1 && isTouching) {
-                // Single touch rotation
-                const touch = e.touches[0];
-                const deltaX = touch.clientX - touchCurrentX;
-                const deltaY = touch.clientY - touchCurrentY;
-                
-                targetRotationY += deltaX * 0.02;
-                targetRotationX += deltaY * 0.02;
-                
-                touchCurrentX = touch.clientX;
-                touchCurrentY = touch.clientY;
-                resetMouseActivity();
-            } else if (e.touches.length === 2) {
-                // Two finger pinch zoom
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
-                const currentDistance = Math.sqrt(
-                    Math.pow(touch2.clientX - touch1.clientX, 2) +
-                    Math.pow(touch2.clientY - touch1.clientY, 2)
-                );
-                
-                if (lastTouchDistance > 0) {
-                    const scale = currentDistance / lastTouchDistance;
-                    targetZoom *= scale;
-                    targetZoom = Math.max(0.1, Math.min(1000, targetZoom));
-                }
-                lastTouchDistance = currentDistance;
-                resetMouseActivity();
-            }
-        }
-
-        function handleTouchEnd(e) {
-            e.preventDefault();
-            if (e.touches.length === 0) {
-                isTouching = false;
-                lastTouchDistance = 0;
-            }
-        }
-
-        // Device orientation handler
-        function handleDeviceOrientation(e) {
-            if (!isDeviceOrientationEnabled) return;
-            
-            deviceOrientation.alpha = e.alpha;
-            deviceOrientation.beta = e.beta;
-            deviceOrientation.gamma = e.gamma;
-            
-            // Convert device orientation to camera rotation
-            const alpha = e.alpha ? THREE.MathUtils.degToRad(e.alpha) : 0;
-            const beta = e.beta ? THREE.MathUtils.degToRad(e.beta) : 0;
-            const gamma = e.gamma ? THREE.MathUtils.degToRad(e.gamma) : 0;
-            
-            targetRotationY = alpha;
-            targetRotationX = beta * 0.5; // Giảm độ nhạy cho trục X
-        }
-
-        // Initialize immediately when Three.js loads
-        function init() {
-            console.log('Starting init function...');
-            
-            // Scene
+        // Initialize Three.js
+        function initThreeJS() {
             scene = new THREE.Scene();
-            console.log('Scene created');
-
-            // Camera
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 2, 5); // Nâng camera lên một chút
-            camera.lookAt(0, 0, 0); // Nhìn vào tâm
-            console.log('Camera created');
-
-            // Renderer
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
             renderer = new THREE.WebGLRenderer({ 
                 canvas: document.getElementById('canvas'),
-                alpha: true
+                alpha: true,
+                antialias: true
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            console.log('Renderer created');
-
-            // Video element
-            video = document.getElementById('video');
-            canvas = document.getElementById('canvas');
-
-            // Không set background texture ngay, sẽ set khi bật camera
-            // const loader = new THREE.TextureLoader();
-            // const backgroundTexture = loader.load('./tour360/alma.jpg');
-            // scene.background = backgroundTexture;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             
-            // Simple lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
-            console.log('Lighting added');
-
-            // Create building model immediately
-            createBuilding();
-            status.textContent = 'Đang tải model...';
-            console.log('Loading GLB model...');
-
-            // Mouse controls (for desktop)
-            canvas.addEventListener('mousedown', (e) => {
-                isMouseDown = true;
-                mouseX = e.clientX;
-                mouseY = e.clientY;
-                resetMouseActivity();
-            });
-
-            canvas.addEventListener('mouseup', () => {
-                isMouseDown = false;
-                resetMouseActivity();
-            });
-
-            canvas.addEventListener('mousemove', (e) => {
-                if (isMouseDown) {
-                    const deltaX = e.clientX - mouseX;
-                    const deltaY = e.clientY - mouseY;
-                    
-                    targetRotationY += deltaX * 0.02;
-                    targetRotationX += deltaY * 0.02;
-                    
-                    mouseX = e.clientX;
-                    mouseY = e.clientY;
-                }
-                resetMouseActivity();
-            });
-
-            // Mouse wheel zoom
-            canvas.addEventListener('wheel', (e) => {
-                e.preventDefault();
-                const zoomSpeed = 0.5;
-                if (e.deltaY > 0) {
-                    targetZoom += zoomSpeed;
-                } else {
-                    targetZoom -= zoomSpeed;
-                }
-                targetZoom = Math.max(0.1, Math.min(1000, targetZoom));
-                resetMouseActivity();
-            });
-
-            // Touch controls (for mobile)
-            canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-            canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-            canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
-
-            // Device orientation (for mobile AR)
-            if (typeof DeviceOrientationEvent !== 'undefined') {
-                window.addEventListener('deviceorientation', handleDeviceOrientation, true);
-            }
-
-            // AR Button click handler
-            arButton.addEventListener('click', async () => {
-                arButton.disabled = true;
-                arButton.textContent = '🚀 Đang khởi tạo...';
-                
-                try {
-                    await startCamera();
-                    isDeviceOrientationEnabled = true;
-                    arButton.style.display = 'none';
-                    toggleModeBtn.style.display = 'block';
-                    transparencyBtn.style.display = 'block';
-                    status.textContent = 'AR Mode Active';
-                } catch (error) {
-                    console.error('AR initialization failed:', error);
-                    arButton.disabled = false;
-                    arButton.textContent = '🚀 Thử lại';
-                    status.textContent = 'Không thể khởi tạo AR';
-                }
-            });
-
-            // Zoom button handlers
-            zoomInBtn.addEventListener('click', () => {
-                targetZoom -= 0.5;
-                targetZoom = Math.max(0.1, Math.min(1000, targetZoom));
-                resetMouseActivity();
-            });
-
-            zoomOutBtn.addEventListener('click', () => {
-                targetZoom += 0.5;
-                targetZoom = Math.max(0.1, Math.min(1000, targetZoom));
-                resetMouseActivity();
-            });
-
-            // Toggle mode handler
-            let isCameraMode = true;
-            toggleModeBtn.addEventListener('click', () => {
-                if (isCameraMode) {
-                    // Switch to preview mode
-                    const loader = new THREE.TextureLoader();
-                    const backgroundTexture = loader.load('./tour360/alma.jpg');
-                    scene.background = backgroundTexture;
-                    
-                    // Show background sphere
-                    if (backgroundSphere) {
-                        backgroundSphere.visible = true;
-                    }
-                    
-                    toggleModeBtn.textContent = '🎨 Preview Mode';
-                    status.textContent = 'Preview Mode';
-                    isCameraMode = false;
-                } else {
-                    // Switch back to camera mode
-                    if (video.srcObject) {
-                        const videoTexture = new THREE.VideoTexture(video);
-                        videoTexture.minFilter = THREE.LinearFilter;
-                        videoTexture.magFilter = THREE.LinearFilter;
-                        scene.background = videoTexture;
-                        
-                        // Hide background sphere
-                        if (backgroundSphere) {
-                            backgroundSphere.visible = false;
-                        }
-                        
-                        toggleModeBtn.textContent = '📷 Camera Mode';
-                        status.textContent = 'AR Mode Active';
-                        isCameraMode = true;
-                    }
-                }
-            });
-
-            // Transparency control
-            transparencyBtn.addEventListener('click', () => {
-                // Cycle through opacity levels
-                if (modelOpacity >= 1.0) {
-                    modelOpacity = 0.5;
-                    transparencyBtn.textContent = '👁️ 50%';
-                } else if (modelOpacity >= 0.5) {
-                    modelOpacity = 0.2;
-                    transparencyBtn.textContent = '👁️ 20%';
-                } else {
-                    modelOpacity = 1.0;
-                    transparencyBtn.textContent = '👁️ 100%';
-                }
-                
-                // Apply opacity to model
-                if (model) {
-                    model.traverse((child) => {
-                        if (child.isMesh && child.material) {
-                            child.material.transparent = true;
-                            child.material.opacity = modelOpacity;
-                        }
-                    });
-                }
-            });
-
-            // Window resize
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-
-            // Start animation loop
-            animate();
-
-            // Start camera after a short delay
-            // setTimeout(startCamera, 1000);
-
-            console.log('init');
             
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            canvas = document.getElementById('canvas');
+            video = document.getElementById('video');
         }
 
-        function createBuilding() {
-            console.log('Loading GLB model...');
+        // Initialize AR.js
+        function initARJS() {
+            // Create AR.js source
+            arToolkitSource = new THREEx.ArToolkitSource({
+                sourceType: 'webcam',
+                sourceWidth: 640,
+                sourceHeight: 480,
+                displayWidth: window.innerWidth,
+                displayHeight: window.innerHeight
+            });
+
+            // Initialize AR.js source
+            arToolkitSource.init(() => {
+                // Set up video element
+                video.srcObject = arToolkitSource.domElement;
+                video.play();
+                
+                // Set up AR.js context
+                arToolkitContext = new THREEx.ArToolkitContext({
+                    cameraParametersUrl: 'https://raw.githack.com/AR-js-org/AR.js/master/data/data/camera_para.dat',
+                    detectionMode: 'mono_and_matrix',
+                    matrixCodeType: '3x3',
+                    debug: false
+                });
+                
+                arToolkitContext.init(() => {
+                    camera.projectionMatrix.copy(arToolkitContext.getProjectionMatrix());
+                });
+                
+                // Create marker controls for plane detection
+                createPlaneMarker();
+            });
+        }
+
+        // Create plane marker for detection
+        function createPlaneMarker() {
+            // Create a large invisible marker that covers the entire view
+            const markerGroup = new THREE.Group();
             
-            // Load GLB model
-            const loader = new GLTFLoader();
-            loader.load('./tour360/ekana_stadium_low_poly_lucknow_city_game_asset.glb', (gltf) => {
-                model = gltf.scene;
-                
-                // Điều chỉnh kích thước và vị trí
-                model.scale.set(0.1, 0.1, 0.1); // Phóng to model
-                model.position.set(0, 0, 0); // Đặt thấp hơn một chút
-                
-                scene.add(model);
-                console.log('GLB model loaded successfully');
-                status.textContent = 'Model Hornet đã sẵn sàng';
-            }, (progress) => {
-                console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
-                status.textContent = 'Đang tải model... ' + Math.round(progress.loaded / progress.total * 100) + '%';
-            }, (error) => {
-                console.error('Error loading GLB:', error);
-                status.textContent = 'Lỗi tải model';
-                
-                // Fallback: tạo hình vuông đỏ nếu không load được
-                model = new THREE.Mesh(
-                    new THREE.BoxGeometry(2, 2, 2),
-                    new THREE.MeshBasicMaterial({ color: 0xFF0000 })
+            // Add plane detection geometry
+            const planeGeometry = new THREE.PlaneGeometry(100, 100);
+            const planeMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0x00ff00, 
+                transparent: true, 
+                opacity: 0.1,
+                side: THREE.DoubleSide
+            });
+            const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
+            planeMesh.rotation.x = -Math.PI / 2;
+            planeMesh.position.y = -1;
+            markerGroup.add(planeMesh);
+            
+            scene.add(markerGroup);
+        }
+
+        // Load 3D model
+        async function loadModel() {
+            return new Promise((resolve, reject) => {
+                const loader = new GLTFLoader();
+                loader.load('./tour360/ekana_stadium_low_poly_lucknow_city_game_asset.glb', 
+                    (gltf) => {
+                        model = gltf.scene;
+                        model.scale.set(0.1, 0.1, 0.1);
+                        model.castShadow = true;
+                        model.receiveShadow = true;
+                        resolve(model);
+                    },
+                    (progress) => {
+                        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+                    },
+                    (error) => {
+                        console.error('Error loading model:', error);
+                        reject(error);
+                    }
                 );
-                model.position.set(0, 0, 0);
-                scene.add(model);
-                console.log('Fallback: Red cube added');
             });
-            
-            // Tạo sphere background nhưng ẩn đi khi có camera
-            const textureLoader = new THREE.TextureLoader();
-            const texture = textureLoader.load('./tour360/alma.jpg');
-            
-            backgroundSphere = new THREE.Mesh(
-                new THREE.SphereGeometry(50, 32, 32),
-                new THREE.MeshBasicMaterial({ 
-                    map: texture,
-                    side: THREE.BackSide,
-                    transparent: true,
-                    opacity: 0.3 // Làm trong suốt hơn
-                })
-            );
-            backgroundSphere.position.set(0, 0, 0);
-            scene.add(backgroundSphere);
-            console.log('Background sphere with alma.jpg added');
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
+        // Place model on tap
+        function placeModel(x, y) {
+            if (!model || arMode !== 'scanning') return;
             
-            // Check for auto rotate activation
-            const currentTime = Date.now();
-            if (currentTime - lastMouseActivity > autoRotateDelay && !isAutoRotating) {
-                isAutoRotating = true;
-                console.log('Auto rotate activated');
+            // Convert screen coordinates to world coordinates
+            const vector = new THREE.Vector3();
+            vector.set(
+                (x / window.innerWidth) * 2 - 1,
+                -(y / window.innerHeight) * 2 + 1,
+                0.5
+            );
+            
+            // Create placed model
+            placedModel = model.clone();
+            placedModel.position.copy(vector);
+            placedModel.position.z = -1;
+            
+            scene.add(placedModel);
+            
+            arMode = 'placed';
+            status.textContent = 'Model đã được đặt';
+            instructions.textContent = '🔄 Di chuyển camera để xem model từ các góc độ khác nhau';
+            placementIndicator.classList.remove('visible', 'placing');
+            scanButton.textContent = '✅ Model Placed';
+        }
+
+        // Reset AR
+        function resetAR() {
+            if (placedModel) {
+                scene.remove(placedModel);
+                placedModel = null;
             }
             
-            // Auto rotate logic (only when not in AR mode)
-            if (isAutoRotating && !isCameraActive) {
-                targetRotationY += autoRotateSpeed;
+            arMode = 'scanning';
+            status.textContent = 'AR đã sẵn sàng - Quét mặt phẳng';
+            instructions.textContent = '📏 Di chuyển camera để quét mặt phẳng';
+            placementIndicator.classList.remove('visible', 'placing');
+            scanButton.textContent = '📏 Scan Mode';
+        }
+
+        // Render loop
+        function render() {
+            if (!isARActive) return;
+            
+            // Update AR.js
+            if (arToolkitSource && arToolkitSource.ready) {
+                arToolkitContext.update(arToolkitSource.domElement);
             }
             
-            // Device orientation integration (when enabled)
-            if (isDeviceOrientationEnabled && !isTouching && !isMouseDown) {
-                // Blend device orientation with touch controls
-                targetRotationY += (deviceOrientation.alpha * 0.001) * 0.1;
-                targetRotationX += (deviceOrientation.beta * 0.001) * 0.1;
+            // Show placement indicator when scanning
+            if (arMode === 'scanning') {
+                placementIndicator.classList.add('visible');
+            } else {
+                placementIndicator.classList.remove('visible', 'placing');
             }
             
-            // Smooth rotation
-            rotationX += (targetRotationX - rotationX) * 0.02;
-            rotationY += (targetRotationY - rotationY) * 0.02;
-            
-            // Smooth zoom
-            currentZoom += (targetZoom - currentZoom) * 0.15;
-            camera.position.z = currentZoom;
-            
-            // Apply rotation to model
-            if (model) {
-                model.rotation.x = rotationX;
-                model.rotation.y = rotationY;
-            }
-            
-            // Rotate background sphere
-            if (backgroundSphere) {
-                backgroundSphere.rotation.y = rotationY * 0.8;
-                backgroundSphere.rotation.x = rotationX * 0.8;
-            }
-            
-            // Render 3D scene (camera feed is now background texture)
+            // Render scene
             renderer.render(scene, camera);
         }
 
+        // Event listeners
+        arButton.addEventListener('click', initAR);
         
-        // Initialize immediately since THREE is imported
-        console.log('Three.js imported successfully');
-        init();
+        resetButton.addEventListener('click', resetAR);
+        
+        scanButton.addEventListener('click', () => {
+            if (arMode === 'scanning') {
+                status.textContent = 'Chạm vào màn hình để đặt model';
+                instructions.textContent = '👆 Chạm vào vị trí muốn đặt model';
+                placementIndicator.classList.add('placing');
+            }
+        });
+        
+        // Handle tap to place
+        canvas.addEventListener('click', (e) => {
+            if (!isARActive || arMode !== 'scanning') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            placeModel(x, y);
+        });
+        
+        // Touch support
+        canvas.addEventListener('touchstart', (e) => {
+            if (!isARActive || arMode !== 'scanning') return;
+            e.preventDefault();
+            
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            
+            placeModel(x, y);
+        });
+
+        // Window resize
+        window.addEventListener('resize', () => {
+            if (camera && renderer) {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                
+                if (arToolkitSource) {
+                    arToolkitSource.onResize();
+                }
+            }
+        });
+
+        // Start render loop
+        function animate() {
+            requestAnimationFrame(animate);
+            render();
+        }
+        
+        animate();
+        
+        console.log('AR Plane Detection initialized');
     </script>
 </body>
 </html>
