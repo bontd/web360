@@ -61,6 +61,13 @@
             type: "scene",
             text: "Sang Phòng 2",
             sceneId: "room2"
+          },
+        {
+            pitch: 5,
+            yaw: -30,
+            type: "scene",
+            text: "Trở lại Phòng 1",
+            sceneId: "room1"
           }]
         },
         room2: {
@@ -80,6 +87,14 @@
     // Hide loader when scene is ready
     viewer.on('load', () => {
       document.getElementById('loader').classList.add('hidden');
+    });
+
+    viewer.on('scenechange', function(sceneId) {
+        console.log('Đang chuyển sang room:', sceneId);
+    });
+
+    viewer.on('scenechangefadedone', function(sceneId) {
+        console.log('Đã vào room mới:', sceneId);
     });
   </script>
 </body>

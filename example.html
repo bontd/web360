@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Cube Simple</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+        }
+
+        #status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 11px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div id="status">Sẵn sàng</div>
+        <div id="instructions">
+            🖱️ Kéo chuột để xoay | 🔍 Cuộn chuột để zoom
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from './three.js/build/three.module.min.js';
+        
+        let scene, camera, renderer, model, backgroundSphere;
+        let video, canvas;
+        let isCameraActive = false;
+        let isMouseDown = false;
+        let mouseX = 0, mouseY = 0;
+        let targetRotationX = 0, targetRotationY = 0;
+        let rotationX = 0, rotationY = 0;
+        let targetZoom = 5; // Target zoom distance
+        let currentZoom = 5; // Current zoom distance
+
+        const status = document.getElementById('status');
+
+        // Initialize immediately when Three.js loads
+        function init() {
+            console.log('Starting init function...');
+            
+            // Scene
+            scene = new THREE.Scene();
+            console.log('Scene created');
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, 5); // Nâng camera lên một chút
+            camera.lookAt(0, 0, 0); // Nhìn vào tâm
+            console.log('Camera created');
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('canvas'),
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            console.log('Renderer created');
+
+            // Video element
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+
+            // Set background texture từ ảnh alma.jpg
+            const loader = new THREE.TextureLoader();
+            const backgroundTexture = loader.load('./tour360/alma.jpg');
+            scene.background = backgroundTexture;
+            
+            // Simple lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+            scene.add(ambientLight);
+            console.log('Lighting added');
+
+            // Create building model immediately
+            createBuilding();
+            status.textContent = 'Hình vuông đã sẵn sàng';
+            console.log('Building created');
+
+            // Mouse controls
+            canvas.addEventListener('mousedown', (e) => {
+                isMouseDown = true;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            canvas.addEventListener('mouseup', () => {
+                isMouseDown = false;
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (isMouseDown) {
+                    const deltaX = e.clientX - mouseX;
+                    const deltaY = e.clientY - mouseY;
+                    
+                    targetRotationY += deltaX * 0.02; // Tăng tốc độ xoay
+                    targetRotationX += deltaY * 0.02;
+                    
+                    mouseX = e.clientX;
+                    mouseY = e.clientY;
+                }
+            });
+
+            // Zoom with mouse wheel - smooth zoom
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomSpeed = 0.5;
+                if (e.deltaY > 0) {
+                    targetZoom += zoomSpeed;
+                } else {
+                    targetZoom -= zoomSpeed;
+                }
+                // Giới hạn zoom trong khoảng 2-10
+                targetZoom = Math.max(2, Math.min(10, targetZoom));
+            });
+
+            // Window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Start animation loop
+            animate();
+
+            // Start camera after a short delay
+            setTimeout(startCamera, 1000);
+
+            console.log('init');
+            
+        }
+
+        function createBuilding() {
+            console.log('Creating building...');
+            
+            // Tạo một hình vuông đơn giản
+            model = new THREE.Mesh(
+                new THREE.BoxGeometry(2, 2, 2),
+                new THREE.MeshBasicMaterial({ color: 0xFF0000 }) // Màu đỏ để dễ thấy
+            );
+            model.position.set(0, 0, 0); // Đặt ở giữa
+            scene.add(model);
+            console.log('Red cube added');
+            
+            // Thêm một hình vuông nhỏ hơn để test
+            const smallCube = new THREE.Mesh(
+                new THREE.BoxGeometry(1, 1, 1),
+                new THREE.MeshBasicMaterial({ color: 0x00FF00 }) // Màu xanh lá
+            );
+            smallCube.position.set(3, 0, 0);
+            scene.add(smallCube);
+            console.log('Green cube added');
+            
+            // Tạo sphere background lớn với texture alma.jpg
+            const loader = new THREE.TextureLoader();
+            const texture = loader.load('./tour360/alma.jpg');
+            
+            backgroundSphere = new THREE.Mesh(
+                new THREE.SphereGeometry(50, 32, 32),
+                new THREE.MeshBasicMaterial({ 
+                    map: texture,
+                    side: THREE.BackSide // Hiển thị mặt trong
+                })
+            );
+            backgroundSphere.position.set(0, 0, 0);
+            scene.add(backgroundSphere);
+            console.log('Background sphere with alma.jpg added');
+        }
+
+        async function startCamera() {
+            console.log('startCamera');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    } 
+                });
+                
+                video.srcObject = stream;
+                video.play();
+                
+                isCameraActive = true;
+                status.textContent = 'Camera đã khởi động';
+            } catch (error) {
+                console.error('Lỗi camera:', error);
+                status.textContent = 'Không thể truy cập camera';
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Smooth rotation - tăng tốc độ để phản hồi nhanh hơn
+            rotationX += (targetRotationX - rotationX) * 0.02;
+            rotationY += (targetRotationY - rotationY) * 0.02;
+            
+            // Smooth zoom
+            currentZoom += (targetZoom - currentZoom) * 0.15; // Zoom mượt hơn với tốc độ 0.15
+            camera.position.z = currentZoom;
+            
+            if (model) {
+                model.rotation.x = rotationX;
+                model.rotation.y = rotationY;
+            }
+            
+            // Xoay background sphere theo camera
+            if (backgroundSphere) {
+                backgroundSphere.rotation.y = rotationY * 0.8; // Xoay chậm hơn
+                backgroundSphere.rotation.x = rotationX * 0.8;
+            }
+            
+            // Render 3D scene
+            renderer.render(scene, camera);
+            
+            // Overlay video
+            if (isCameraActive && video.videoWidth > 0) {
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            }
+        }
+
+        
+        // Initialize immediately since THREE is imported
+        console.log('Three.js imported successfully');
+        init();
+    </script>
+</body>
+</html>
