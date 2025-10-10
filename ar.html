@@ -169,15 +169,36 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 80px;
-            height: 80px;
+            width: 120px;
+            height: 120px;
             border: 4px solid #00ff00;
-            border-radius: 50%;
+            border-radius: 15px;
             z-index: 999;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.3s ease;
             box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        #placement-area {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 150px;
+            height: 150px;
+            border: 3px dashed #00ff00;
+            border-radius: 20px;
+            z-index: 998;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            background: rgba(0, 255, 0, 0.05);
+        }
+
+        #placement-area.visible {
+            opacity: 1;
         }
 
         #placement-indicator.visible {
@@ -278,12 +299,13 @@
         <button id="ar-button">🚀 Bắt đầu AR</button>
         <button id="reset-button" class="ar-control" style="display: none;">🔄 Reset</button>
         <button id="scan-button" class="ar-control" style="display: none;">📏 Scan Mode</button>
+        <div id="placement-area"></div>
         <div id="placement-indicator"></div>
         <div class="touch-control" id="zoom-in" style="display: none;">+</div>
         <div class="touch-control" id="zoom-out" style="display: none;">−</div>
         <div class="touch-control" id="zoom-reset" style="display: none;">⌂</div>
         <div id="instructions">
-            🚀 Nhấn "Bắt đầu AR" → 📏 Quét mặt phẳng → 👆 Chạm để đặt model → 👆 Kéo xoay | 🤏 Pinch zoom | 🔄 Nghiêng điện thoại
+            🚀 Nhấn "Bắt đầu AR" → 📏 Quét mặt phẳng → 👆 Chạm vào vùng để đặt model → 🔄 Di chuyển điện thoại để xem
         </div>
     </div>
 
@@ -337,6 +359,11 @@
         let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
         let isDeviceOrientationEnabled = false;
         
+        // World space positioning
+        let modelWorldPosition = new THREE.Vector3(0, 0, -2);
+        let cameraDistance = 3;
+        let isWorldSpaceMode = false;
+        
         // AR.js integration
         let arToolkitSource, arToolkitContext, arMarkerControls;
         
@@ -347,6 +374,7 @@
         const resetButton = document.getElementById('reset-button');
         const scanButton = document.getElementById('scan-button');
         const placementIndicator = document.getElementById('placement-indicator');
+        const placementArea = document.getElementById('placement-area');
         const instructions = document.getElementById('instructions');
         const cameraDebug = document.getElementById('camera-debug');
         const testCameraBtn = document.getElementById('test-camera');
@@ -549,8 +577,8 @@
                                     window.innerWidth < 768 || 
                                     'ontouchstart' in window;
                     
-                    const scale = isMobile ? '0.05 0.05 0.05' : '0.1 0.1 0.1';
-                    const distance = isMobile ? '-1.5' : '-2';
+                    const scale = isMobile ? '0.0005 0.0005 0.0005' : '0.0001 0.0001 0.0001';
+                    const distance = isMobile ? '-0.0002' : '-0.0001';
                     
                     entity.setAttribute('scale', scale);
                     entity.setAttribute('position', `${x} ${y} ${distance}`);
@@ -696,7 +724,7 @@
             });
         }
 
-        // Place model on tap
+        // Place model in world space
         function placeModel(x, y) {
             console.log('placeModel called with:', x, y);
             console.log('Model exists:', !!model);
@@ -717,47 +745,33 @@
             placementIndicator.classList.add('placing');
             status.textContent = 'Đang đặt model...';
             
-            // Check if A-Frame is being used
-            if (typeof AFRAME !== 'undefined' && window.placeAFrameModel) {
-                console.log('Using A-Frame placement');
-                const normalizedX = (x / window.innerWidth) * 4 - 2;
-                const normalizedY = -((y / window.innerHeight) * 4 - 2);
-                window.placeAFrameModel(normalizedX, normalizedY);
-            } else {
-                console.log('Using Three.js placement');
-                
-                // Detect mobile for distance adjustment
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                                window.innerWidth < 768 || 
-                                'ontouchstart' in window;
-                
-                // Convert screen coordinates to world coordinates for Three.js
-                const vector = new THREE.Vector3();
-                const distance = isMobile ? -1.5 : -2; // Closer on mobile
-                
-                vector.set(
-                    (x / window.innerWidth) * 2 - 1,
-                    -(y / window.innerHeight) * 2 + 1,
-                    distance
-                );
-                
-                console.log('Placing model at:', vector, 'Distance:', distance);
-                
-                // Create placed model
-                placedModel = model.clone();
-                placedModel.position.copy(vector);
-                
-                // Add some rotation to make it look better
-                placedModel.rotation.y = Math.PI / 4;
-                
-                scene.add(placedModel);
-                console.log('Model added to scene');
-            }
+            // Convert screen coordinates to world coordinates
+            const vector = new THREE.Vector3();
+            vector.set(
+                (x / window.innerWidth) * 4 - 2,  // X: -2 to 2
+                -((y / window.innerHeight) * 4 - 2), // Y: -2 to 2
+                -2  // Fixed Z distance
+            );
+            
+            // Store world position
+            modelWorldPosition.copy(vector);
+            isWorldSpaceMode = true;
+            
+            console.log('Placing model at world position:', vector);
+            
+            // Create placed model
+            placedModel = model.clone();
+            placedModel.position.copy(vector);
+            placedModel.rotation.y = Math.PI / 4;
+            
+            scene.add(placedModel);
+            console.log('Model added to scene');
             
             arMode = 'placed';
             status.textContent = 'Model đã được đặt';
-            instructions.textContent = '👆 Chạm và kéo để xoay | 🤏 Pinch để zoom | 🔄 Di chuyển camera để xem';
+            instructions.textContent = '🔄 Di chuyển điện thoại để xem model từ các góc độ khác nhau';
             placementIndicator.classList.remove('visible', 'placing');
+            placementArea.classList.remove('visible');
             scanButton.textContent = '✅ Model Placed';
             
             // Show zoom controls
@@ -765,13 +779,13 @@
             zoomOutBtn.style.display = 'block';
             zoomResetBtn.style.display = 'block';
             
-            // Enable device orientation
+            // Enable device orientation for world space tracking
             if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
                 DeviceOrientationEvent.requestPermission().then(response => {
                     if (response === 'granted') {
                         window.addEventListener('deviceorientation', handleDeviceOrientation);
                         isDeviceOrientationEnabled = true;
-                        console.log('Device orientation enabled');
+                        console.log('Device orientation enabled for world space');
                     }
                 });
             } else {
@@ -780,7 +794,7 @@
                 console.log('Device orientation enabled (no permission needed)');
             }
             
-            console.log('Model placement completed');
+            console.log('Model placement completed in world space');
         }
 
         // Zoom functions
@@ -832,25 +846,61 @@
             zoomResetBtn.style.display = 'none';
         }
 
-        // Device orientation handler
+        // Device orientation handler for world space tracking
         function handleDeviceOrientation(e) {
-            if (!isARActive || arMode !== 'placed') return;
+            if (!isARActive || arMode !== 'placed' || !isWorldSpaceMode) return;
             
             deviceOrientation.alpha = e.alpha || 0;
             deviceOrientation.beta = e.beta || 0;
             deviceOrientation.gamma = e.gamma || 0;
             
-            // Apply device rotation to camera
+            // Convert to radians
             const alpha = (deviceOrientation.alpha * Math.PI) / 180;
             const beta = (deviceOrientation.beta * Math.PI) / 180;
             const gamma = (deviceOrientation.gamma * Math.PI) / 180;
             
-            // Rotate camera based on device orientation
-            const distance = 3;
-            camera.position.x = Math.sin(alpha) * Math.cos(beta) * distance;
-            camera.position.y = Math.sin(beta) * distance;
-            camera.position.z = Math.cos(alpha) * Math.cos(beta) * distance;
-            camera.lookAt(0, 0, 0);
+            // Calculate camera position relative to model's world position
+            const offsetX = Math.sin(alpha) * Math.cos(beta) * cameraDistance;
+            const offsetY = Math.sin(beta) * cameraDistance;
+            const offsetZ = Math.cos(alpha) * Math.cos(beta) * cameraDistance;
+            
+            // Position camera relative to model's world position
+            camera.position.set(
+                modelWorldPosition.x + offsetX,
+                modelWorldPosition.y + offsetY,
+                modelWorldPosition.z + offsetZ
+            );
+            
+            // Always look at the model's world position
+            camera.lookAt(modelWorldPosition);
+            
+            // Auto-adjust distance based on device movement
+            updateCameraDistance();
+        }
+
+        // Update camera distance based on device movement
+        function updateCameraDistance() {
+            if (!isWorldSpaceMode) return;
+            
+            // Calculate current distance from model
+            const currentDistance = camera.position.distanceTo(modelWorldPosition);
+            
+            // Auto-adjust zoom based on distance
+            const targetDistance = Math.max(1, Math.min(5, currentDistance));
+            cameraDistance = targetDistance;
+            
+            // Update model scale based on distance
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                            window.innerWidth < 768 || 
+                            'ontouchstart' in window;
+            
+            const baseScale = isMobile ? 0.05 : 0.1;
+            const distanceScale = Math.max(0.5, Math.min(2, targetDistance / 3));
+            const finalScale = baseScale * distanceScale * modelScale;
+            
+            if (placedModel) {
+                placedModel.scale.set(finalScale, finalScale, finalScale);
+            }
         }
 
         // Render loop
@@ -865,6 +915,7 @@
             // Show placement indicator when scanning
             if (arMode === 'scanning') {
                 placementIndicator.classList.add('visible');
+                placementArea.classList.add('visible');
                 // Show plane detection grid
                 const markerGroup = scene.children.find(child => child.userData.isMarkerGroup);
                 if (markerGroup) {
@@ -872,6 +923,7 @@
                 }
             } else {
                 placementIndicator.classList.remove('visible', 'placing');
+                placementArea.classList.remove('visible');
                 // Hide plane detection grid when model is placed
                 const markerGroup = scene.children.find(child => child.userData.isMarkerGroup);
                 if (markerGroup) {
@@ -911,9 +963,9 @@
         });
         
         
-        // Touch handlers for model interaction
+        // Touch handlers for manual controls (only when not in world space mode)
         function handleTouchStart(e) {
-            if (!isARActive || arMode !== 'placed') return;
+            if (!isARActive || arMode !== 'placed' || isWorldSpaceMode) return;
             e.preventDefault();
             
             if (e.touches.length === 1) {
@@ -934,7 +986,7 @@
         }
 
         function handleTouchMove(e) {
-            if (!isARActive || arMode !== 'placed') return;
+            if (!isARActive || arMode !== 'placed' || isWorldSpaceMode) return;
             e.preventDefault();
             
             if (e.touches.length === 1 && isTouching) {
@@ -967,7 +1019,7 @@
         }
 
         function handleTouchEnd(e) {
-            if (!isARActive || arMode !== 'placed') return;
+            if (!isARActive || arMode !== 'placed' || isWorldSpaceMode) return;
             e.preventDefault();
             
             isTouching = false;
