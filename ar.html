@@ -32,6 +32,7 @@
             height: 100%;
             object-fit: cover;
             z-index: 1;
+            background: #000;
         }
 
         #canvas {
@@ -42,6 +43,7 @@
             height: 100%;
             z-index: 2;
             touch-action: none;
+            background: transparent;
         }
 
         #status {
@@ -244,6 +246,11 @@
                 onclick="document.getElementById('camera-debug').style.display='none'">
             📷 Camera: Waiting...
         </div>
+        <button id="test-camera" style="position: absolute; top: 100px; right: 10px; 
+                background: rgba(255,0,0,0.8); color: white; border: none; padding: 8px 12px; 
+                border-radius: 10px; font-size: 12px; z-index: 1000; cursor: pointer;">
+            🧪 Test Camera
+        </button>
         <button id="ar-button">🚀 Bắt đầu AR</button>
         <button id="reset-button" class="ar-control" style="display: none;">🔄 Reset</button>
         <button id="scan-button" class="ar-control" style="display: none;">📏 Scan Mode</button>
@@ -305,6 +312,7 @@
         const placementIndicator = document.getElementById('placement-indicator');
         const instructions = document.getElementById('instructions');
         const cameraDebug = document.getElementById('camera-debug');
+        const testCameraBtn = document.getElementById('test-camera');
 
         // Initialize AR with AR.js
         async function initAR() {
@@ -375,6 +383,43 @@
             
             canvas = document.getElementById('canvas');
             video = document.getElementById('video');
+        }
+
+        // Test camera function
+        async function testCamera() {
+            try {
+                console.log('Testing camera access...');
+                cameraDebug.textContent = '📷 Camera: Testing...';
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                });
+                
+                // Direct video setup
+                video.srcObject = stream;
+                video.style.display = 'block';
+                video.style.zIndex = '1';
+                
+                video.onloadedmetadata = () => {
+                    video.play();
+                    cameraDebug.textContent = '📷 Camera: Working!';
+                    console.log('Camera test successful');
+                    console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+                };
+                
+                video.onerror = (error) => {
+                    console.error('Video error:', error);
+                    cameraDebug.textContent = '📷 Camera: Error';
+                };
+                
+            } catch (error) {
+                console.error('Camera test failed:', error);
+                cameraDebug.textContent = '📷 Camera: Failed - ' + error.message;
+            }
         }
 
         // Initialize AR.js
@@ -480,9 +525,19 @@
                     video.onloadedmetadata = () => {
                         video.play();
                         
-                        // Make sure video is visible
+                        // Make sure video is visible and on top
                         video.style.display = 'block';
-                        video.style.zIndex = '1';
+                        video.style.zIndex = '10';
+                        video.style.position = 'absolute';
+                        video.style.top = '0';
+                        video.style.left = '0';
+                        video.style.width = '100%';
+                        video.style.height = '100%';
+                        video.style.objectFit = 'cover';
+                        
+                        // Hide canvas temporarily to see video
+                        canvas.style.display = 'none';
+                        
                         cameraDebug.textContent = '📷 Camera: Fallback Active';
                         
                         // Set up camera projection
@@ -493,10 +548,12 @@
                         createPlaneMarker();
                         
                         console.log('Custom AR initialized successfully');
+                        console.log('Video dimensions:', video.videoWidth, 'x', video.videoHeight);
                         resolve();
                     };
                 }).catch(error => {
                     console.error('Camera access failed:', error);
+                    cameraDebug.textContent = '📷 Camera: Failed - ' + error.message;
                     reject(error);
                 });
             });
@@ -617,6 +674,7 @@
 
         // Event listeners
         arButton.addEventListener('click', initAR);
+        testCameraBtn.addEventListener('click', testCamera);
         
         resetButton.addEventListener('click', resetAR);
         

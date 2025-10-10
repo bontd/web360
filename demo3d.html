@@ -68,7 +68,8 @@
         <canvas id="canvas"></canvas>
         <div id="status">Sẵn sàng</div>
         <div id="instructions">
-            🖱️ Kéo chuột để xoay | 🔍 Cuộn chuột để zoom
+            🖱️ Kéo chuột để xoay | 🔍 Cuộn chuột để zoom<br>
+            📱 Chạm và kéo để xoay | 📏 Chụm tay để zoom
         </div>
     </div>
 
@@ -94,6 +95,10 @@
         let targetZoom = 5; // Target zoom distance
         let currentZoom = 5; // Current zoom distance
         
+        // Touch variables
+        let lastTouchDistance = 0;
+        let isTouchActive = false;
+        
         // Auto rotate variables
         let lastMouseActivity = Date.now();
         let isAutoRotating = false;
@@ -106,6 +111,14 @@
         function resetMouseActivity() {
             lastMouseActivity = Date.now();
             isAutoRotating = false; // Dừng auto rotate khi có tương tác
+        }
+
+        // Helper function to get distance between two touches
+        function getTouchDistance(touch1, touch2) {
+            return Math.sqrt(
+                Math.pow(touch2.clientX - touch1.clientX, 2) +
+                Math.pow(touch2.clientY - touch1.clientY, 2)
+            );
         }
 
         // Initialize immediately when Three.js loads
@@ -188,6 +201,78 @@
                 // Giới hạn zoom trong khoảng 2-10
                 targetZoom = Math.max(0.1, Math.min(10, targetZoom));
                 resetMouseActivity(); // Reset timer khi có tương tác
+            });
+
+            // Touch controls for mobile
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                isTouchActive = true;
+                
+                if (e.touches.length === 1) {
+                    // Single touch - rotation
+                    mouseX = e.touches[0].clientX;
+                    mouseY = e.touches[0].clientY;
+                    resetMouseActivity();
+                } else if (e.touches.length === 2) {
+                    // Two touches - pinch to zoom
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    lastTouchDistance = Math.sqrt(
+                        Math.pow(touch2.clientX - touch1.clientX, 2) +
+                        Math.pow(touch2.clientY - touch1.clientY, 2)
+                    );
+                    resetMouseActivity();
+                }
+            });
+
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                
+                if (e.touches.length === 1) {
+                    // Single touch - rotation
+                    const deltaX = e.touches[0].clientX - mouseX;
+                    const deltaY = e.touches[0].clientY - mouseY;
+                    
+                    targetRotationY += deltaX * 0.03; // Tăng tốc độ xoay cho mobile
+                    targetRotationX += deltaY * 0.03;
+                    
+                    mouseX = e.touches[0].clientX;
+                    mouseY = e.touches[0].clientY;
+                    resetMouseActivity();
+                } else if (e.touches.length === 2) {
+                    // Two touches - pinch to zoom
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    const currentDistance = Math.sqrt(
+                        Math.pow(touch2.clientX - touch1.clientX, 2) +
+                        Math.pow(touch2.clientY - touch1.clientY, 2)
+                    );
+                    
+                    if (lastTouchDistance > 0) {
+                        const zoomSpeed = 0.01;
+                        const distanceChange = currentDistance - lastTouchDistance;
+                        
+                        if (distanceChange > 0) {
+                            // Pinch out - zoom in
+                            targetZoom -= distanceChange * zoomSpeed;
+                        } else {
+                            // Pinch in - zoom out
+                            targetZoom -= distanceChange * zoomSpeed;
+                        }
+                        
+                        // Giới hạn zoom
+                        targetZoom = Math.max(0.1, Math.min(10, targetZoom));
+                    }
+                    
+                    lastTouchDistance = currentDistance;
+                    resetMouseActivity();
+                }
+            });
+
+            canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                isTouchActive = false;
+                resetMouseActivity();
             });
 
             // Window resize
