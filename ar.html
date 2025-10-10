@@ -158,6 +158,11 @@
             right: 20px;
         }
 
+        #zoom-reset {
+            bottom: 160px;
+            right: 20px;
+        }
+
         /* AR Plane Detection Styles */
         #placement-indicator {
             position: absolute;
@@ -276,6 +281,7 @@
         <div id="placement-indicator"></div>
         <div class="touch-control" id="zoom-in" style="display: none;">+</div>
         <div class="touch-control" id="zoom-out" style="display: none;">−</div>
+        <div class="touch-control" id="zoom-reset" style="display: none;">⌂</div>
         <div id="instructions">
             🚀 Nhấn "Bắt đầu AR" → 📏 Quét mặt phẳng → 👆 Chạm để đặt model → 🔄 Di chuyển để xem
         </div>
@@ -314,6 +320,7 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         
         let scene, camera, renderer, model, placedModel;
+        let modelScale = 1.0; // Current scale multiplier
         let video, canvas;
         let isARActive = false;
         let isScanning = true;
@@ -333,6 +340,9 @@
         const cameraDebug = document.getElementById('camera-debug');
         const testCameraBtn = document.getElementById('test-camera');
         const testPlaceBtn = document.getElementById('test-place');
+        const zoomInBtn = document.getElementById('zoom-in');
+        const zoomOutBtn = document.getElementById('zoom-out');
+        const zoomResetBtn = document.getElementById('zoom-reset');
 
         // Initialize AR with AR.js
         async function initAR() {
@@ -518,8 +528,17 @@
                 window.placeAFrameModel = function(x, y) {
                     const entity = document.createElement('a-entity');
                     entity.setAttribute('gltf-model', './tour360/ekana_stadium_low_poly_lucknow_city_game_asset.glb');
-                    entity.setAttribute('scale', '0.1 0.1 0.1');
-                    entity.setAttribute('position', `${x} ${y} -2`);
+                    
+                    // Detect mobile for scale adjustment
+                    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                                    window.innerWidth < 768 || 
+                                    'ontouchstart' in window;
+                    
+                    const scale = isMobile ? '0.05 0.05 0.05' : '0.1 0.1 0.1';
+                    const distance = isMobile ? '-1.5' : '-2';
+                    
+                    entity.setAttribute('scale', scale);
+                    entity.setAttribute('position', `${x} ${y} ${distance}`);
                     aScene.appendChild(entity);
                 };
                 
@@ -631,7 +650,22 @@
                 loader.load('./tour360/ekana_stadium_low_poly_lucknow_city_game_asset.glb', 
                     (gltf) => {
                 model = gltf.scene;
-                        model.scale.set(0.1, 0.1, 0.1);
+                
+                        // Detect mobile device and adjust scale
+                        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                                        window.innerWidth < 768 || 
+                                        'ontouchstart' in window;
+                        
+                        if (isMobile) {
+                            // Smaller scale for mobile
+                            model.scale.set(0.05, 0.05, 0.05);
+                            console.log('Mobile detected - using smaller scale');
+                        } else {
+                            // Default scale for desktop
+                            model.scale.set(0.1, 0.1, 0.1);
+                            console.log('Desktop detected - using default scale');
+                        }
+                        
                         model.castShadow = true;
                         model.receiveShadow = true;
                         resolve(model);
@@ -676,15 +710,23 @@
                 window.placeAFrameModel(normalizedX, normalizedY);
             } else {
                 console.log('Using Three.js placement');
+                
+                // Detect mobile for distance adjustment
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                                window.innerWidth < 768 || 
+                                'ontouchstart' in window;
+                
                 // Convert screen coordinates to world coordinates for Three.js
                 const vector = new THREE.Vector3();
+                const distance = isMobile ? -1.5 : -2; // Closer on mobile
+                
                 vector.set(
                     (x / window.innerWidth) * 2 - 1,
                     -(y / window.innerHeight) * 2 + 1,
-                    -2 // Place model at a fixed distance
+                    distance
                 );
                 
-                console.log('Placing model at:', vector);
+                console.log('Placing model at:', vector, 'Distance:', distance);
                 
                 // Create placed model
                 placedModel = model.clone();
@@ -703,7 +745,40 @@
             placementIndicator.classList.remove('visible', 'placing');
             scanButton.textContent = '✅ Model Placed';
             
+            // Show zoom controls
+            zoomInBtn.style.display = 'block';
+            zoomOutBtn.style.display = 'block';
+            zoomResetBtn.style.display = 'block';
+            
             console.log('Model placement completed');
+        }
+
+        // Zoom functions
+        function zoomModel(direction) {
+            if (!placedModel) return;
+            
+            const zoomFactor = 0.1;
+            if (direction === 'in') {
+                modelScale += zoomFactor;
+            } else if (direction === 'out') {
+                modelScale = Math.max(0.1, modelScale - zoomFactor);
+            } else if (direction === 'reset') {
+                modelScale = 1.0;
+            }
+            
+            // Apply scale to placed model
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                            window.innerWidth < 768 || 
+                            'ontouchstart' in window;
+            
+            const baseScale = isMobile ? 0.05 : 0.1;
+            placedModel.scale.set(
+                baseScale * modelScale, 
+                baseScale * modelScale, 
+                baseScale * modelScale
+            );
+            
+            console.log('Model scale:', modelScale);
         }
 
         // Reset AR
@@ -713,11 +788,18 @@
                 placedModel = null;
             }
             
+            modelScale = 1.0; // Reset scale
+            
             arMode = 'scanning';
             status.textContent = 'AR đã sẵn sàng - Quét mặt phẳng';
             instructions.textContent = '📏 Di chuyển camera để quét mặt phẳng';
             placementIndicator.classList.remove('visible', 'placing');
             scanButton.textContent = '📏 Scan Mode';
+            
+            // Hide zoom controls
+            zoomInBtn.style.display = 'none';
+            zoomOutBtn.style.display = 'none';
+            zoomResetBtn.style.display = 'none';
         }
 
         // Render loop
@@ -763,6 +845,11 @@
         });
         
         resetButton.addEventListener('click', resetAR);
+        
+        // Zoom controls
+        zoomInBtn.addEventListener('click', () => zoomModel('in'));
+        zoomOutBtn.addEventListener('click', () => zoomModel('out'));
+        zoomResetBtn.addEventListener('click', () => zoomModel('reset'));
         
         scanButton.addEventListener('click', () => {
             if (arMode === 'scanning') {
