@@ -85,7 +85,7 @@
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         
-        let scene, camera, renderer, model, backgroundSphere;
+        let scene, camera, renderer, model, backgroundSphere, modelGroup;
         let video, canvas;
         let isCameraActive = false;
         let isMouseDown = false;
@@ -199,7 +199,7 @@
                     targetZoom -= zoomSpeed;
                 }
                 // Giới hạn zoom trong khoảng 2-10
-                targetZoom = Math.max(0.1, Math.min(10, targetZoom));
+                targetZoom = Math.max(3, Math.min(10, targetZoom));
                 resetMouseActivity(); // Reset timer khi có tương tác
             });
 
@@ -295,18 +295,24 @@
         function createBuilding() {
             console.log('Loading GLB model...');
             
+            // Tạo group để chứa model và xoay quanh trọng tâm
+            modelGroup = new THREE.Group();
+            modelGroup.position.set(0, 0, 0); // Group ở gốc tọa độ
+            scene.add(modelGroup);
+            
             // Load GLB model
             const loader = new GLTFLoader();
-            loader.load('./tour360/ekana_stadium_low_poly_lucknow_city_game_asset.glb', (gltf) => {
+            loader.load('./tour360/L9_12B_low.glb', (gltf) => {
                 model = gltf.scene;
                 
-                // Điều chỉnh kích thước và vị trí
-                model.scale.set(0.1, 0.1, 0.1); // Phóng to model
-                model.position.set(0, 0, 0); // Đặt thấp hơn một chút
+                // Điều chỉnh kích thước và vị trí model trong group
+                model.scale.set(0.01, 0.01, 0.01); // Phóng to model
+                model.position.set(1.5, 0, 1.5); // Đặt model trong group
                 
-                scene.add(model);
+                // Thêm model vào group thay vì scene
+                modelGroup.add(model);
                 console.log('GLB model loaded successfully');
-                status.textContent = 'Model Hornet đã sẵn sàng';
+                status.textContent = 'Model đã sẵn sàng';
             }, (progress) => {
                 console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
                 status.textContent = 'Đang tải model... ' + Math.round(progress.loaded / progress.total * 100) + '%';
@@ -319,8 +325,8 @@
                     new THREE.BoxGeometry(2, 2, 2),
                     new THREE.MeshBasicMaterial({ color: 0xFF0000 })
                 );
-                model.position.set(0, 0, 0);
-                scene.add(model);
+                model.position.set(1.5, 0, 1.5); // Đặt trong group
+                modelGroup.add(model);
                 console.log('Fallback: Red cube added');
             });
             
@@ -363,15 +369,15 @@
             currentZoom += (targetZoom - currentZoom) * 0.15; // Zoom mượt hơn với tốc độ 0.15
             camera.position.z = currentZoom;
             
-            if (model) {
-                model.rotation.x = rotationX;
-                model.rotation.y = rotationY;
+            if (modelGroup) {
+                modelGroup.rotation.x = rotationX;
+                modelGroup.rotation.y = rotationY;
             }
             
             // Xoay background sphere theo camera
             if (backgroundSphere) {
-                backgroundSphere.rotation.y = rotationY * 0.8; // Xoay chậm hơn
-                backgroundSphere.rotation.x = rotationX * 0.8;
+                backgroundSphere.rotation.y = rotationY * 0.08; // Xoay chậm hơn
+                backgroundSphere.rotation.x = rotationX * 0.08;
             }
             
             // Render 3D scene

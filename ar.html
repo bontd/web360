@@ -164,14 +164,15 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 60px;
-            height: 60px;
-            border: 3px solid #00ff00;
+            width: 80px;
+            height: 80px;
+            border: 4px solid #00ff00;
             border-radius: 50%;
             z-index: 999;
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.3s ease;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
         }
 
         #placement-indicator.visible {
@@ -180,7 +181,20 @@
 
         #placement-indicator.placing {
             border-color: #ff0000;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
             animation: pulse 1s infinite;
+        }
+
+        #placement-indicator::before {
+            content: '+';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ff00;
+            font-size: 30px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
         }
 
         @keyframes pulse {
@@ -342,13 +356,20 @@
                 await loadModel();
                 
                 loading.style.display = 'none';
-                status.textContent = 'AR đã sẵn sàng - Quét mặt phẳng';
+                
+                // Auto-start scanning mode
+                arMode = 'scanning';
+                status.textContent = 'Đang quét mặt phẳng...';
                 instructions.textContent = '📏 Di chuyển camera để quét mặt phẳng';
+                scanButton.textContent = '📏 Scanning...';
                 
                 isARActive = true;
                 arButton.style.display = 'none';
                 resetButton.style.display = 'block';
                 scanButton.style.display = 'block';
+                
+                // Show placement indicator
+                placementIndicator.classList.add('visible');
                 
             } catch (error) {
                 console.error('AR initialization failed:', error);
@@ -563,21 +584,37 @@
         function createPlaneMarker() {
             // Create a large invisible marker that covers the entire view
             const markerGroup = new THREE.Group();
+            markerGroup.userData.isMarkerGroup = true;
             
-            // Add plane detection geometry
+            // Add plane detection geometry with visual feedback
             const planeGeometry = new THREE.PlaneGeometry(100, 100);
             const planeMaterial = new THREE.MeshBasicMaterial({ 
                 color: 0x00ff00, 
                 transparent: true, 
-                opacity: 0.1,
-                side: THREE.DoubleSide
+                opacity: 0.3,
+                side: THREE.DoubleSide,
+                wireframe: true
             });
             const planeMesh = new THREE.Mesh(planeGeometry, planeMaterial);
             planeMesh.rotation.x = -Math.PI / 2;
             planeMesh.position.y = -1;
             markerGroup.add(planeMesh);
             
+            // Add grid overlay for better visual feedback
+            const gridHelper = new THREE.GridHelper(20, 20, 0x00ff00, 0x00ff00);
+            gridHelper.material.transparent = true;
+            gridHelper.material.opacity = 0.5;
+            gridHelper.position.y = -0.9;
+            markerGroup.add(gridHelper);
+            
             scene.add(markerGroup);
+            
+            // Make it visible when scanning
+            if (arMode === 'scanning') {
+                markerGroup.visible = true;
+            } else {
+                markerGroup.visible = false;
+            }
         }
 
         // Load 3D model
@@ -664,8 +701,18 @@
             // Show placement indicator when scanning
             if (arMode === 'scanning') {
                 placementIndicator.classList.add('visible');
+                // Show plane detection grid
+                const markerGroup = scene.children.find(child => child.userData.isMarkerGroup);
+                if (markerGroup) {
+                    markerGroup.visible = true;
+                }
             } else {
                 placementIndicator.classList.remove('visible', 'placing');
+                // Hide plane detection grid when model is placed
+                const markerGroup = scene.children.find(child => child.userData.isMarkerGroup);
+                if (markerGroup) {
+                    markerGroup.visible = false;
+                }
             }
             
             // Render scene
