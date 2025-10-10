@@ -238,6 +238,12 @@
             <div>Đang khởi tạo AR...</div>
         </div>
         <div id="status">Sẵn sàng</div>
+        <div id="camera-debug" style="position: absolute; top: 60px; right: 10px; 
+                background: rgba(0,0,0,0.8); color: white; padding: 5px 10px; 
+                border-radius: 10px; font-size: 12px; z-index: 1000; cursor: pointer;"
+                onclick="document.getElementById('camera-debug').style.display='none'">
+            📷 Camera: Waiting...
+        </div>
         <button id="ar-button">🚀 Bắt đầu AR</button>
         <button id="reset-button" class="ar-control" style="display: none;">🔄 Reset</button>
         <button id="scan-button" class="ar-control" style="display: none;">📏 Scan Mode</button>
@@ -298,6 +304,7 @@
         const scanButton = document.getElementById('scan-button');
         const placementIndicator = document.getElementById('placement-indicator');
         const instructions = document.getElementById('instructions');
+        const cameraDebug = document.getElementById('camera-debug');
 
         // Initialize AR with AR.js
         async function initAR() {
@@ -311,12 +318,15 @@
                 // Initialize AR.js if available, otherwise use fallback
                 if (typeof THREEx !== 'undefined') {
                     console.log('Using AR.js mode');
+                    cameraDebug.textContent = '📷 Camera: AR.js mode';
                     initARJS();
                 } else if (typeof AFRAME !== 'undefined') {
                     console.log('Using A-Frame AR mode');
+                    cameraDebug.textContent = '📷 Camera: A-Frame mode';
                     initAFrameAR();
                 } else {
                     console.log('No AR library available, using fallback');
+                    cameraDebug.textContent = '📷 Camera: Fallback mode';
                     await initCustomAR();
                 }
                 
@@ -385,6 +395,11 @@
                     video.srcObject = arToolkitSource.domElement;
                     video.play();
                     
+                    // Make sure video is visible
+                    video.style.display = 'block';
+                    video.style.zIndex = '1';
+                    cameraDebug.textContent = '📷 Camera: AR.js Active';
+                    
                     // Set up AR.js context
                     arToolkitContext = new THREEx.ArToolkitContext({
                         cameraParametersUrl: 'https://cdn.jsdelivr.net/npm/ar.js@1.7.2/data/data/camera_para.dat',
@@ -412,14 +427,20 @@
         function initAFrameAR() {
             try {
                 // Create A-Frame scene with AR
-                const scene = document.createElement('a-scene');
-                scene.setAttribute('embedded', '');
-                scene.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false;');
+                const aScene = document.createElement('a-scene');
+                aScene.setAttribute('embedded', '');
+                aScene.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false;');
+                aScene.style.position = 'absolute';
+                aScene.style.top = '0';
+                aScene.style.left = '0';
+                aScene.style.width = '100%';
+                aScene.style.height = '100%';
+                aScene.style.zIndex = '2';
                 
                 // Add camera
-                const camera = document.createElement('a-camera');
-                camera.setAttribute('gps-camera', 'rotation-reader: true;');
-                scene.appendChild(camera);
+                const aCamera = document.createElement('a-camera');
+                aCamera.setAttribute('gps-camera', 'rotation-reader: true;');
+                aScene.appendChild(aCamera);
                 
                 // Add model when placed
                 window.placeAFrameModel = function(x, y) {
@@ -427,13 +448,14 @@
                     entity.setAttribute('gltf-model', './tour360/ekana_stadium_low_poly_lucknow_city_game_asset.glb');
                     entity.setAttribute('scale', '0.1 0.1 0.1');
                     entity.setAttribute('position', `${x} ${y} -2`);
-                    scene.appendChild(entity);
+                    aScene.appendChild(entity);
                 };
                 
-                // Hide video element and show A-Frame
-                video.style.display = 'none';
-                canvas.style.display = 'none';
-                document.getElementById('container').appendChild(scene);
+                // Keep video visible, add A-Frame scene on top
+                video.style.display = 'block';
+                video.style.zIndex = '1';
+                cameraDebug.textContent = '📷 Camera: A-Frame Active';
+                document.getElementById('container').appendChild(aScene);
                 
                 console.log('A-Frame AR initialized successfully');
             } catch (error) {
@@ -457,6 +479,11 @@
                     
                     video.onloadedmetadata = () => {
                         video.play();
+                        
+                        // Make sure video is visible
+                        video.style.display = 'block';
+                        video.style.zIndex = '1';
+                        cameraDebug.textContent = '📷 Camera: Fallback Active';
                         
                         // Set up camera projection
                         camera.aspect = video.videoWidth / video.videoHeight;
