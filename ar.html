@@ -265,6 +265,11 @@
                 border-radius: 10px; font-size: 12px; z-index: 1000; cursor: pointer;">
             🧪 Test Camera
         </button>
+        <button id="test-place" style="position: absolute; top: 140px; right: 10px; 
+                background: rgba(0,255,0,0.8); color: white; border: none; padding: 8px 12px; 
+                border-radius: 10px; font-size: 12px; z-index: 1000; cursor: pointer;">
+            🎯 Test Place
+        </button>
         <button id="ar-button">🚀 Bắt đầu AR</button>
         <button id="reset-button" class="ar-control" style="display: none;">🔄 Reset</button>
         <button id="scan-button" class="ar-control" style="display: none;">📏 Scan Mode</button>
@@ -327,6 +332,7 @@
         const instructions = document.getElementById('instructions');
         const cameraDebug = document.getElementById('camera-debug');
         const testCameraBtn = document.getElementById('test-camera');
+        const testPlaceBtn = document.getElementById('test-place');
 
         // Initialize AR with AR.js
         async function initAR() {
@@ -556,8 +562,9 @@
                         video.style.height = '100%';
                         video.style.objectFit = 'cover';
                         
-                        // Hide canvas temporarily to see video
-                        canvas.style.display = 'none';
+                        // Show canvas for model rendering
+                        canvas.style.display = 'block';
+                        canvas.style.zIndex = '5';
                         
                         cameraDebug.textContent = '📷 Camera: Fallback Active';
                         
@@ -642,14 +649,33 @@
 
         // Place model on tap
         function placeModel(x, y) {
-            if (!model || arMode !== 'scanning') return;
+            console.log('placeModel called with:', x, y);
+            console.log('Model exists:', !!model);
+            console.log('AR mode:', arMode);
+            
+            if (!model) {
+                console.error('Model not loaded yet');
+                status.textContent = 'Model chưa được tải, vui lòng đợi...';
+                return;
+            }
+            
+            if (arMode !== 'scanning') {
+                console.error('Not in scanning mode:', arMode);
+                return;
+            }
+            
+            // Show placement indicator as placing
+            placementIndicator.classList.add('placing');
+            status.textContent = 'Đang đặt model...';
             
             // Check if A-Frame is being used
             if (typeof AFRAME !== 'undefined' && window.placeAFrameModel) {
+                console.log('Using A-Frame placement');
                 const normalizedX = (x / window.innerWidth) * 4 - 2;
                 const normalizedY = -((y / window.innerHeight) * 4 - 2);
                 window.placeAFrameModel(normalizedX, normalizedY);
             } else {
+                console.log('Using Three.js placement');
                 // Convert screen coordinates to world coordinates for Three.js
                 const vector = new THREE.Vector3();
                 vector.set(
@@ -657,6 +683,8 @@
                     -(y / window.innerHeight) * 2 + 1,
                     -2 // Place model at a fixed distance
                 );
+                
+                console.log('Placing model at:', vector);
                 
                 // Create placed model
                 placedModel = model.clone();
@@ -666,6 +694,7 @@
                 placedModel.rotation.y = Math.PI / 4;
                 
                 scene.add(placedModel);
+                console.log('Model added to scene');
             }
             
             arMode = 'placed';
@@ -673,6 +702,8 @@
             instructions.textContent = '🔄 Di chuyển camera để xem model từ các góc độ khác nhau';
             placementIndicator.classList.remove('visible', 'placing');
             scanButton.textContent = '✅ Model Placed';
+            
+            console.log('Model placement completed');
         }
 
         // Reset AR
@@ -722,6 +753,14 @@
         // Event listeners
         arButton.addEventListener('click', initAR);
         testCameraBtn.addEventListener('click', testCamera);
+        testPlaceBtn.addEventListener('click', () => {
+            console.log('Test place button clicked');
+            if (isARActive && arMode === 'scanning') {
+                placeModel(window.innerWidth / 2, window.innerHeight / 2);
+            } else {
+                alert('AR chưa khởi động hoặc không ở chế độ scanning');
+            }
+        });
         
         resetButton.addEventListener('click', resetAR);
         
@@ -734,27 +773,35 @@
         });
         
         
-        // Handle tap to place
-        canvas.addEventListener('click', (e) => {
-            if (!isARActive || arMode !== 'scanning') return;
+        // Handle tap to place - use document to catch all clicks
+        document.addEventListener('click', (e) => {
+            console.log('Click detected:', e.clientX, e.clientY);
+            if (!isARActive || arMode !== 'scanning') {
+                console.log('AR not active or not in scanning mode');
+                return;
+            }
             
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const x = e.clientX;
+            const y = e.clientY;
             
+            console.log('Calling placeModel with:', x, y);
             placeModel(x, y);
         });
         
-        // Touch support
-        canvas.addEventListener('touchstart', (e) => {
-            if (!isARActive || arMode !== 'scanning') return;
+        // Touch support - use document to catch all touches
+        document.addEventListener('touchstart', (e) => {
+            console.log('Touch detected');
+            if (!isARActive || arMode !== 'scanning') {
+                console.log('AR not active or not in scanning mode');
+                return;
+            }
             e.preventDefault();
             
             const touch = e.touches[0];
-            const rect = canvas.getBoundingClientRect();
-            const x = touch.clientX - rect.left;
-            const y = touch.clientY - rect.top;
+            const x = touch.clientX;
+            const y = touch.clientY;
             
+            console.log('Calling placeModel with touch:', x, y);
             placeModel(x, y);
         });
 
