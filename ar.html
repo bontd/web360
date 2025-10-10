@@ -283,7 +283,7 @@
         <div class="touch-control" id="zoom-out" style="display: none;">−</div>
         <div class="touch-control" id="zoom-reset" style="display: none;">⌂</div>
         <div id="instructions">
-            🚀 Nhấn "Bắt đầu AR" → 📏 Quét mặt phẳng → 👆 Chạm để đặt model → 🔄 Di chuyển để xem
+            🚀 Nhấn "Bắt đầu AR" → 📏 Quét mặt phẳng → 👆 Chạm để đặt model → 👆 Kéo xoay | 🤏 Pinch zoom | 🔄 Nghiêng điện thoại
         </div>
     </div>
 
@@ -325,6 +325,17 @@
         let isARActive = false;
         let isScanning = true;
         let arMode = 'scanning'; // scanning, placing, placed
+        
+        // Touch controls
+        let touchStartX = 0, touchStartY = 0;
+        let isTouching = false;
+        let lastTouchTime = 0;
+        let touchScale = 1.0;
+        let lastTouchDistance = 0;
+        
+        // Device orientation
+        let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
+        let isDeviceOrientationEnabled = false;
         
         // AR.js integration
         let arToolkitSource, arToolkitContext, arMarkerControls;
@@ -420,6 +431,10 @@
             
             canvas = document.getElementById('canvas');
             video = document.getElementById('video');
+            
+            // Initialize camera position for model viewing
+            camera.position.set(0, 0, 3);
+            camera.lookAt(0, 0, 0);
         }
 
         // Test camera function
@@ -741,7 +756,7 @@
             
             arMode = 'placed';
             status.textContent = 'Model đã được đặt';
-            instructions.textContent = '🔄 Di chuyển camera để xem model từ các góc độ khác nhau';
+            instructions.textContent = '👆 Chạm và kéo để xoay | 🤏 Pinch để zoom | 🔄 Di chuyển camera để xem';
             placementIndicator.classList.remove('visible', 'placing');
             scanButton.textContent = '✅ Model Placed';
             
@@ -749,6 +764,21 @@
             zoomInBtn.style.display = 'block';
             zoomOutBtn.style.display = 'block';
             zoomResetBtn.style.display = 'block';
+            
+            // Enable device orientation
+            if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
+                DeviceOrientationEvent.requestPermission().then(response => {
+                    if (response === 'granted') {
+                        window.addEventListener('deviceorientation', handleDeviceOrientation);
+                        isDeviceOrientationEnabled = true;
+                        console.log('Device orientation enabled');
+                    }
+                });
+            } else {
+                window.addEventListener('deviceorientation', handleDeviceOrientation);
+                isDeviceOrientationEnabled = true;
+                console.log('Device orientation enabled (no permission needed)');
+            }
             
             console.log('Model placement completed');
         }
@@ -800,6 +830,27 @@
             zoomInBtn.style.display = 'none';
             zoomOutBtn.style.display = 'none';
             zoomResetBtn.style.display = 'none';
+        }
+
+        // Device orientation handler
+        function handleDeviceOrientation(e) {
+            if (!isARActive || arMode !== 'placed') return;
+            
+            deviceOrientation.alpha = e.alpha || 0;
+            deviceOrientation.beta = e.beta || 0;
+            deviceOrientation.gamma = e.gamma || 0;
+            
+            // Apply device rotation to camera
+            const alpha = (deviceOrientation.alpha * Math.PI) / 180;
+            const beta = (deviceOrientation.beta * Math.PI) / 180;
+            const gamma = (deviceOrientation.gamma * Math.PI) / 180;
+            
+            // Rotate camera based on device orientation
+            const distance = 3;
+            camera.position.x = Math.sin(alpha) * Math.cos(beta) * distance;
+            camera.position.y = Math.sin(beta) * distance;
+            camera.position.z = Math.cos(alpha) * Math.cos(beta) * distance;
+            camera.lookAt(0, 0, 0);
         }
 
         // Render loop
@@ -860,6 +911,75 @@
         });
         
         
+        // Touch handlers for model interaction
+        function handleTouchStart(e) {
+            if (!isARActive || arMode !== 'placed') return;
+            e.preventDefault();
+            
+            if (e.touches.length === 1) {
+                // Single touch - rotation
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                isTouching = true;
+                lastTouchTime = Date.now();
+            } else if (e.touches.length === 2) {
+                // Two touches - pinch to zoom
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                lastTouchDistance = Math.sqrt(
+                    Math.pow(touch2.clientX - touch1.clientX, 2) + 
+                    Math.pow(touch2.clientY - touch1.clientY, 2)
+                );
+            }
+        }
+
+        function handleTouchMove(e) {
+            if (!isARActive || arMode !== 'placed') return;
+            e.preventDefault();
+            
+            if (e.touches.length === 1 && isTouching) {
+                // Single touch rotation
+                const deltaX = e.touches[0].clientX - touchStartX;
+                const deltaY = e.touches[0].clientY - touchStartY;
+                
+                // Rotate camera around model
+                const rotationSpeed = 0.01;
+                camera.position.x = Math.sin(deltaX * rotationSpeed) * 3;
+                camera.position.z = Math.cos(deltaX * rotationSpeed) * 3;
+                camera.position.y = Math.sin(deltaY * rotationSpeed) * 2;
+                camera.lookAt(0, 0, 0);
+                
+            } else if (e.touches.length === 2) {
+                // Two touches - pinch to zoom
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const currentDistance = Math.sqrt(
+                    Math.pow(touch2.clientX - touch1.clientX, 2) + 
+                    Math.pow(touch2.clientY - touch1.clientY, 2)
+                );
+                
+                if (lastTouchDistance > 0) {
+                    const scaleChange = currentDistance / lastTouchDistance;
+                    zoomModel(scaleChange > 1 ? 'in' : 'out');
+                }
+                lastTouchDistance = currentDistance;
+            }
+        }
+
+        function handleTouchEnd(e) {
+            if (!isARActive || arMode !== 'placed') return;
+            e.preventDefault();
+            
+            isTouching = false;
+            lastTouchDistance = 0;
+            
+            // Check for tap (quick touch)
+            if (Date.now() - lastTouchTime < 200 && e.touches.length === 0) {
+                // This was a tap, not a drag
+                return;
+            }
+        }
+
         // Handle tap to place - use document to catch all clicks
         document.addEventListener('click', (e) => {
             console.log('Click detected:', e.clientX, e.clientY);
@@ -877,20 +997,27 @@
         
         // Touch support - use document to catch all touches
         document.addEventListener('touchstart', (e) => {
-            console.log('Touch detected');
-            if (!isARActive || arMode !== 'scanning') {
-                console.log('AR not active or not in scanning mode');
-                return;
+            if (!isARActive) return;
+            
+            if (arMode === 'scanning') {
+                // Placement mode
+                console.log('Touch detected for placement');
+                e.preventDefault();
+                
+                const touch = e.touches[0];
+                const x = touch.clientX;
+                const y = touch.clientY;
+                
+                console.log('Calling placeModel with touch:', x, y);
+                placeModel(x, y);
+            } else if (arMode === 'placed') {
+                // Model interaction mode
+                handleTouchStart(e);
             }
-            e.preventDefault();
-            
-            const touch = e.touches[0];
-            const x = touch.clientX;
-            const y = touch.clientY;
-            
-            console.log('Calling placeModel with touch:', x, y);
-            placeModel(x, y);
         });
+
+        document.addEventListener('touchmove', handleTouchMove);
+        document.addEventListener('touchend', handleTouchEnd);
 
         // Window resize
         window.addEventListener('resize', () => {
