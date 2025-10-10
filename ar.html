@@ -299,6 +299,7 @@
         <button id="ar-button">🚀 Bắt đầu AR</button>
         <button id="reset-button" class="ar-control" style="display: none;">🔄 Reset</button>
         <button id="scan-button" class="ar-control" style="display: none;">📏 Scan Mode</button>
+        <button id="world-toggle" class="ar-control" style="display: none;">🌍 World Space</button>
         <div id="placement-area"></div>
         <div id="placement-indicator"></div>
         <div class="touch-control" id="zoom-in" style="display: none;">+</div>
@@ -373,6 +374,7 @@
         const loading = document.getElementById('loading');
         const resetButton = document.getElementById('reset-button');
         const scanButton = document.getElementById('scan-button');
+        const worldToggle = document.getElementById('world-toggle');
         const placementIndicator = document.getElementById('placement-indicator');
         const placementArea = document.getElementById('placement-area');
         const instructions = document.getElementById('instructions');
@@ -614,9 +616,9 @@
                     video.onloadedmetadata = () => {
                         video.play();
                         
-                        // Make sure video is visible and on top
+                        // Make sure video is visible as background
                         video.style.display = 'block';
-                        video.style.zIndex = '10';
+                        video.style.zIndex = '1';
                         video.style.position = 'absolute';
                         video.style.top = '0';
                         video.style.left = '0';
@@ -624,11 +626,20 @@
                         video.style.height = '100%';
                         video.style.objectFit = 'cover';
                         
-                        // Show canvas for model rendering
-                        canvas.style.display = 'block';
-                        canvas.style.zIndex = '5';
+                        // Set video as scene background
+                        const videoTexture = new THREE.VideoTexture(video);
+                        scene.background = videoTexture;
                         
-                        cameraDebug.textContent = '📷 Camera: Fallback Active';
+                        // Show canvas for model rendering on top
+                        canvas.style.display = 'block';
+                        canvas.style.zIndex = '2';
+                        canvas.style.position = 'absolute';
+                        canvas.style.top = '0';
+                        canvas.style.left = '0';
+                        canvas.style.width = '100%';
+                        canvas.style.height = '100%';
+                        
+                        cameraDebug.textContent = '📷 Camera: Active with Background';
                         
                         // Set up camera projection
                         camera.aspect = video.videoWidth / video.videoHeight;
@@ -774,10 +785,11 @@
             placementArea.classList.remove('visible');
             scanButton.textContent = '✅ Model Placed';
             
-            // Show zoom controls
+            // Show zoom controls and world toggle
             zoomInBtn.style.display = 'block';
             zoomOutBtn.style.display = 'block';
             zoomResetBtn.style.display = 'block';
+            worldToggle.style.display = 'block';
             
             // Enable device orientation for world space tracking
             if (typeof DeviceOrientationEvent !== 'undefined' && DeviceOrientationEvent.requestPermission) {
@@ -825,6 +837,31 @@
             console.log('Model scale:', modelScale);
         }
 
+        // Toggle world space mode
+        function toggleWorldSpace() {
+            isWorldSpaceMode = !isWorldSpaceMode;
+            
+            if (isWorldSpaceMode) {
+                worldToggle.textContent = '📱 Screen Space';
+                instructions.textContent = '🌍 Model cố định trong không gian - Di chuyển điện thoại để xem';
+                status.textContent = 'World Space Mode - Model cố định';
+                
+                // Reset camera to look at model
+                camera.lookAt(modelWorldPosition);
+                updateCameraDistance();
+            } else {
+                worldToggle.textContent = '🌍 World Space';
+                instructions.textContent = '👆 Chạm và kéo để xoay | 🤏 Pinch để zoom';
+                status.textContent = 'Screen Space Mode - Model theo màn hình';
+                
+                // Reset camera position
+                camera.position.set(0, 0, 3);
+                camera.lookAt(0, 0, 0);
+            }
+            
+            console.log('World space mode:', isWorldSpaceMode);
+        }
+
         // Reset AR
         function resetAR() {
             if (placedModel) {
@@ -833,6 +870,7 @@
             }
             
             modelScale = 1.0; // Reset scale
+            isWorldSpaceMode = false; // Reset world space mode
             
             arMode = 'scanning';
             status.textContent = 'AR đã sẵn sàng - Quét mặt phẳng';
@@ -844,6 +882,7 @@
             zoomInBtn.style.display = 'none';
             zoomOutBtn.style.display = 'none';
             zoomResetBtn.style.display = 'none';
+            worldToggle.style.display = 'none';
         }
 
         // Device orientation handler for world space tracking
@@ -857,12 +896,14 @@
             // Convert to radians
             const alpha = (deviceOrientation.alpha * Math.PI) / 180;
             const beta = (deviceOrientation.beta * Math.PI) / 180;
-            const gamma = (deviceOrientation.gamma * Math.PI) / 180;
             
             // Calculate camera position relative to model's world position
-            const offsetX = Math.sin(alpha) * Math.cos(beta) * cameraDistance;
-            const offsetY = Math.sin(beta) * cameraDistance;
-            const offsetZ = Math.cos(alpha) * Math.cos(beta) * cameraDistance;
+            // Use a more realistic distance calculation
+            const distance = Math.max(1, Math.min(5, cameraDistance));
+            
+            const offsetX = Math.sin(alpha) * Math.cos(beta) * distance;
+            const offsetY = Math.sin(beta) * distance;
+            const offsetZ = Math.cos(alpha) * Math.cos(beta) * distance;
             
             // Position camera relative to model's world position
             camera.position.set(
@@ -874,33 +915,44 @@
             // Always look at the model's world position
             camera.lookAt(modelWorldPosition);
             
-            // Auto-adjust distance based on device movement
-            updateCameraDistance();
+            // Update model scale based on distance
+            updateModelScaleFromDistance(distance);
         }
 
-        // Update camera distance based on device movement
+        // Update model scale based on distance from camera
+        function updateModelScaleFromDistance(distance) {
+            if (!placedModel || !isWorldSpaceMode) return;
+            
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                            window.innerWidth < 768 || 
+                            'ontouchstart' in window;
+            
+            // Base scale for mobile/desktop
+            const baseScale = isMobile ? 0.05 : 0.1;
+            
+            // Distance-based scaling (closer = larger, farther = smaller)
+            const distanceScale = Math.max(0.3, Math.min(2, 3 / distance));
+            
+            // Apply manual scale multiplier
+            const finalScale = baseScale * distanceScale * modelScale;
+            
+            placedModel.scale.set(finalScale, finalScale, finalScale);
+            
+            console.log('Distance:', distance, 'Scale:', finalScale);
+        }
+
+        // Update camera distance based on device movement (for manual distance tracking)
         function updateCameraDistance() {
             if (!isWorldSpaceMode) return;
             
             // Calculate current distance from model
             const currentDistance = camera.position.distanceTo(modelWorldPosition);
             
-            // Auto-adjust zoom based on distance
-            const targetDistance = Math.max(1, Math.min(5, currentDistance));
-            cameraDistance = targetDistance;
+            // Update cameraDistance variable
+            cameraDistance = Math.max(1, Math.min(5, currentDistance));
             
-            // Update model scale based on distance
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                            window.innerWidth < 768 || 
-                            'ontouchstart' in window;
-            
-            const baseScale = isMobile ? 0.05 : 0.1;
-            const distanceScale = Math.max(0.5, Math.min(2, targetDistance / 3));
-            const finalScale = baseScale * distanceScale * modelScale;
-            
-            if (placedModel) {
-                placedModel.scale.set(finalScale, finalScale, finalScale);
-            }
+            // Update model scale
+            updateModelScaleFromDistance(cameraDistance);
         }
 
         // Render loop
@@ -948,6 +1000,7 @@
         });
         
         resetButton.addEventListener('click', resetAR);
+        worldToggle.addEventListener('click', toggleWorldSpace);
         
         // Zoom controls
         zoomInBtn.addEventListener('click', () => zoomModel('in'));
