@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boat Water Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(180deg, #87CEEB 0%, #4682B4 50%, #1E90FF 100%);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            background: 
+                linear-gradient(180deg, rgba(135,206,235,0.3) 0%, rgba(70,130,180,0.8) 100%),
+                radial-gradient(ellipse at center, rgba(255,255,255,0.1) 0%, transparent 70%);
+        }
+
+        /* Du thuyền chính */
+        .yacht {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 80px;
+            z-index: 10;
+            animation: boatFloat 4s ease-in-out infinite;
+        }
+
+        .yacht-body {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(145deg, #ffffff 0%, #f0f0f0 50%, #8B4513 100%);
+            border-radius: 0 0 50px 50px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .yacht-hull {
+            position: absolute;
+            bottom: 0;
+            left: 10%;
+            width: 80%;
+            height: 30px;
+            background: #8B4513;
+            border-radius: 0 0 20px 20px;
+        }
+
+        .yacht-deck {
+            position: absolute;
+            top: 20px;
+            left: 15%;
+            width: 70%;
+            height: 25px;
+            background: #ffffff;
+            border-radius: 5px;
+        }
+
+        .yacht-cabin {
+            position: absolute;
+            top: 10px;
+            left: 25%;
+            width: 50%;
+            height: 20px;
+            background: #f5f5f5;
+            border-radius: 3px;
+        }
+
+        .yacht-mast {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 40px;
+            background: #654321;
+        }
+
+        .yacht-sail {
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-bottom: 30px solid #ffffff;
+            opacity: 0.9;
+        }
+
+        /* Sóng nước phía sau du thuyền */
+        .boat-wake {
+            position: absolute;
+            top: 35%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 80px;
+            z-index: 5;
+        }
+
+        .wake-line {
+            position: absolute;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, 
+                transparent 0%, 
+                rgba(255,255,255,0.9) 20%, 
+                rgba(255,255,255,1) 50%, 
+                rgba(255,255,255,0.9) 80%, 
+                transparent 100%);
+            border-radius: 2px;
+            animation: wakeFlow 2s ease-out infinite;
+        }
+
+        .wake-line:nth-child(1) {
+            top: 0;
+            animation-delay: 0s;
+            width: 60%;
+            left: 20%;
+        }
+
+        .wake-line:nth-child(2) {
+            top: 15px;
+            animation-delay: 0.2s;
+            width: 80%;
+            left: 10%;
+        }
+
+        .wake-line:nth-child(3) {
+            top: 30px;
+            animation-delay: 0.4s;
+            width: 100%;
+            left: 0;
+        }
+
+        .wake-line:nth-child(4) {
+            top: 45px;
+            animation-delay: 0.6s;
+            width: 70%;
+            left: 15%;
+        }
+
+        .wake-line:nth-child(5) {
+            top: 60px;
+            animation-delay: 0.8s;
+            width: 50%;
+            left: 25%;
+        }
+
+        @keyframes wakeFlow {
+            0% {
+                transform: translateX(-30px) scaleX(0.5);
+                opacity: 0;
+            }
+            50% {
+                transform: translateX(0) scaleX(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(30px) scaleX(1.5);
+                opacity: 0;
+            }
+        }
+
+        /* Chuyển động của du thuyền */
+        @keyframes boatFloat {
+            0%, 100% {
+                transform: translateX(-50%) rotate(0deg) translateY(0);
+            }
+            25% {
+                transform: translateX(-50%) rotate(1deg) translateY(-2px);
+            }
+            50% {
+                transform: translateX(-50%) rotate(0deg) translateY(-1px);
+            }
+            75% {
+                transform: translateX(-50%) rotate(-1deg) translateY(-2px);
+            }
+        }
+
+        /* Hiệu ứng sóng nước xung quanh */
+        .water-ripples {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .ripple {
+            position: absolute;
+            border: 2px solid rgba(255,255,255,0.4);
+            border-radius: 50%;
+            animation: rippleExpand 3s ease-out infinite;
+        }
+
+        .ripple:nth-child(1) {
+            top: 40%;
+            left: 30%;
+            width: 40px;
+            height: 40px;
+            animation-delay: 0s;
+        }
+
+        .ripple:nth-child(2) {
+            top: 60%;
+            left: 60%;
+            width: 60px;
+            height: 60px;
+            animation-delay: 1s;
+        }
+
+        .ripple:nth-child(3) {
+            top: 30%;
+            left: 70%;
+            width: 30px;
+            height: 30px;
+            animation-delay: 2s;
+        }
+
+        .ripple:nth-child(4) {
+            top: 70%;
+            left: 20%;
+            width: 50px;
+            height: 50px;
+            animation-delay: 0.5s;
+        }
+
+        @keyframes rippleExpand {
+            0% {
+                transform: scale(0);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(4);
+                opacity: 0;
+            }
+        }
+
+        /* Hiệu ứng bọt nước */
+        .water-bubbles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .bubble {
+            position: absolute;
+            background: rgba(255,255,255,0.6);
+            border-radius: 50%;
+            animation: bubbleRise 4s ease-out infinite;
+        }
+
+        .bubble:nth-child(1) {
+            width: 8px;
+            height: 8px;
+            top: 80%;
+            left: 30%;
+            animation-delay: 0s;
+        }
+
+        .bubble:nth-child(2) {
+            width: 12px;
+            height: 12px;
+            top: 85%;
+            left: 60%;
+            animation-delay: 1s;
+        }
+
+        .bubble:nth-child(3) {
+            width: 6px;
+            height: 6px;
+            top: 90%;
+            left: 45%;
+            animation-delay: 2s;
+        }
+
+        .bubble:nth-child(4) {
+            width: 10px;
+            height: 10px;
+            top: 88%;
+            left: 70%;
+            animation-delay: 0.5s;
+        }
+
+        @keyframes bubbleRise {
+            0% {
+                transform: translateY(0) scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: translateY(-50px) scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100px) scale(0);
+                opacity: 0;
+            }
+        }
+
+        /* Text overlay */
+        .text-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 15;
+            opacity: 0;
+            animation: fadeInText 2s ease-in-out 2s forwards;
+        }
+
+        @keyframes fadeInText {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.5);
+            }
+            100% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .text-overlay h1 {
+            color: white;
+            font-size: 2.5rem;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+            margin-bottom: 10px;
+        }
+
+        .text-overlay h2 {
+            color: white;
+            font-size: 1.8rem;
+            font-weight: 300;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+            margin-bottom: 15px;
+        }
+
+        .text-overlay .icon-360 {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            line-height: 40px;
+            color: white;
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .yacht {
+                width: 100px;
+                height: 70px;
+            }
+            
+            .boat-wake {
+                width: 150px;
+            }
+            
+            .text-overlay h1 {
+                font-size: 2rem;
+            }
+            
+            .text-overlay h2 {
+                font-size: 1.4rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .yacht {
+                width: 80px;
+                height: 60px;
+            }
+            
+            .boat-wake {
+                width: 120px;
+            }
+            
+            .text-overlay h1 {
+                font-size: 1.5rem;
+            }
+            
+            .text-overlay h2 {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="water-ripples">
+            <div class="ripple"></div>
+            <div class="ripple"></div>
+            <div class="ripple"></div>
+            <div class="ripple"></div>
+        </div>
+        
+        <div class="water-bubbles">
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+            <div class="bubble"></div>
+        </div>
+        
+        <div class="yacht">
+            <div class="yacht-body">
+                <div class="yacht-hull"></div>
+                <div class="yacht-deck"></div>
+                <div class="yacht-cabin"></div>
+                <div class="yacht-mast"></div>
+                <div class="yacht-sail"></div>
+            </div>
+        </div>
+        
+        <div class="boat-wake">
+            <div class="wake-line"></div>
+            <div class="wake-line"></div>
+            <div class="wake-line"></div>
+            <div class="wake-line"></div>
+            <div class="wake-line"></div>
+        </div>
+        
+        <div class="text-overlay">
+            <h1>PHÂN KHU</h1>
+            <h2>HORIZON</h2>
+            <div class="icon-360">360°</div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const yacht = document.querySelector('.yacht');
+            const wake = document.querySelector('.boat-wake');
+            
+            // Hiệu ứng khi hover
+            yacht.addEventListener('mouseenter', function() {
+                this.style.animationDuration = '2s';
+            });
+            
+            yacht.addEventListener('mouseleave', function() {
+                this.style.animationDuration = '4s';
+            });
+            
+            // Hiệu ứng click
+            yacht.addEventListener('click', function() {
+                this.style.animationPlayState = 'paused';
+                setTimeout(() => {
+                    this.style.animationPlayState = 'running';
+                }, 1000);
+            });
+            
+            // Tạo thêm bọt nước khi click
+            yacht.addEventListener('click', function() {
+                const bubbles = document.querySelector('.water-bubbles');
+                for(let i = 0; i < 3; i++) {
+                    const bubble = document.createElement('div');
+                    bubble.className = 'bubble';
+                    bubble.style.left = Math.random() * 100 + '%';
+                    bubble.style.top = '90%';
+                    bubble.style.animationDelay = '0s';
+                    bubbles.appendChild(bubble);
+                    
+                    setTimeout(() => {
+                        bubble.remove();
+                    }, 4000);
+                }
+            });
+        });
+    </script>
+</body>
+</html>

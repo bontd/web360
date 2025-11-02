@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR Cube Simple</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+        }
+
+        #status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 11px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <video id="video" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+        <div id="status">Sẵn sàng</div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.155.0/build/three.module.min.js",
+                "three/addons/": "https://unpkg.com/three@0.155.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        
+        let scene, camera, renderer, model, backgroundSphere, modelGroup;
+        let video, canvas;
+        let isCameraActive = false;
+        let isMouseDown = false;
+        let mouseX = 0, mouseY = 0;
+        let targetRotationX = 0, targetRotationY = 0;
+        let rotationX = 0, rotationY = 0;
+        let targetZoom = 5; // Target zoom distance (deprecated)
+        let currentZoom = 5; // Current zoom distance (deprecated)
+        let cameraRadius = 5; // Bán kính quỹ đạo camera
+        let targetCameraRadius = 5; // Target bán kính cho smooth zoom
+        let cameraSpeed = 0.1; // Tốc độ di chuyển camera forward/backward
+        
+        // Touch variables
+        let lastTouchDistance = 0;
+        let isTouchActive = false;
+        
+        // Auto rotate variables
+        let lastMouseActivity = Date.now();
+        let isAutoRotating = false;
+        const autoRotateDelay = 30000; // 30 giây
+        const autoRotateSpeed = 0.0005; // Tốc độ quay tự động
+
+        const status = document.getElementById('status');
+
+        // Function to reset mouse activity timer
+        function resetMouseActivity() {
+            lastMouseActivity = Date.now();
+            isAutoRotating = false; // Dừng auto rotate khi có tương tác
+        }
+
+        // Helper function to get distance between two touches
+        function getTouchDistance(touch1, touch2) {
+            return Math.sqrt(
+                Math.pow(touch2.clientX - touch1.clientX, 2) +
+                Math.pow(touch2.clientY - touch1.clientY, 2)
+            );
+        }
+
+        // Initialize immediately when Three.js loads
+        function init() {            
+            // Scene
+            scene = new THREE.Scene();
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0.5, 5); // Giảm góc nhìn camera xuống thêm
+            camera.lookAt(0, 0, 0); // Nhìn vào trung tâm
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('canvas'),
+                alpha: true
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            // Video element
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+
+            // Set background texture từ ảnh alma.jpg
+            // const loader = new THREE.TextureLoader();
+            // const backgroundTexture = loader.load('./tour360/alma.jpg');
+            // scene.background = backgroundTexture;
+            
+            // Simple lighting
+            // const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+            // scene.add(ambientLight);
+
+            // Create building model immediately
+            createBuilding();
+            status.textContent = 'Đang tải model...';
+
+            // Mouse controls
+            canvas.addEventListener('mousedown', (e) => {
+                isMouseDown = true;
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+                resetMouseActivity(); // Reset timer khi có tương tác
+            });
+
+            canvas.addEventListener('mouseup', () => {
+                isMouseDown = false;
+                resetMouseActivity(); // Reset timer khi có tương tác
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (isMouseDown) {
+                    const deltaX = e.clientX - mouseX;
+                    const deltaY = e.clientY - mouseY;
+                    
+                    targetRotationY -= deltaX * 0.008; // Đảo ngược hướng để xoay cùng chiều chuột
+                    targetRotationX -= deltaY * 0.005;
+                    
+                    mouseX = e.clientX;
+                    mouseY = e.clientY;
+                }
+                resetMouseActivity(); // Reset timer khi có tương tác
+            });
+
+            // Zoom with mouse wheel - thay đổi camera radius
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomSpeed = 0.5;
+                
+                if (e.deltaY > 0) {
+                    // Zoom out - tăng radius (camera xa hơn)
+                    targetCameraRadius += zoomSpeed;
+                } else {
+                    // Zoom in - giảm radius (camera gần hơn)
+                    targetCameraRadius -= zoomSpeed;
+                }
+                
+                // Giới hạn khoảng cách camera
+                targetCameraRadius = Math.max(2, Math.min(5, targetCameraRadius));
+                
+                resetMouseActivity(); // Reset timer khi có tương tác
+            });
+
+            // Touch controls for mobile
+            canvas.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                isTouchActive = true;
+                
+                if (e.touches.length === 1) {
+                    // Single touch - rotation
+                    mouseX = e.touches[0].clientX;
+                    mouseY = e.touches[0].clientY;
+                    resetMouseActivity();
+                } else if (e.touches.length === 2) {
+                    // Two touches - pinch to zoom
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    lastTouchDistance = Math.sqrt(
+                        Math.pow(touch2.clientX - touch1.clientX, 2) +
+                        Math.pow(touch2.clientY - touch1.clientY, 2)
+                    );
+                    resetMouseActivity();
+                }
+            });
+
+            canvas.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                
+                if (e.touches.length === 1) {
+                    // Single touch - rotation
+                    const deltaX = e.touches[0].clientX - mouseX;
+                    const deltaY = e.touches[0].clientY - mouseY;
+                    
+                    targetRotationY -= deltaX * 0.012; // Đảo ngược hướng để xoay cùng chiều touch
+                    targetRotationX -= deltaY * 0.008;
+                    
+                    mouseX = e.touches[0].clientX;
+                    mouseY = e.touches[0].clientY;
+                    
+                    resetMouseActivity();
+                } else if (e.touches.length === 2) {
+                    // Two touches - pinch to zoom
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    const currentDistance = Math.sqrt(
+                        Math.pow(touch2.clientX - touch1.clientX, 2) +
+                        Math.pow(touch2.clientY - touch1.clientY, 2)
+                    );
+                    
+                    if (lastTouchDistance > 0) {
+                        const zoomSpeed = 0.02;
+                        const distanceChange = currentDistance - lastTouchDistance;
+                        
+                        if (distanceChange > 0) {
+                            // Pinch out - tăng radius (camera xa hơn)
+                            targetCameraRadius += distanceChange * zoomSpeed;
+                        } else {
+                            // Pinch in - giảm radius (camera gần hơn)
+                            targetCameraRadius -= Math.abs(distanceChange) * zoomSpeed;
+                        }
+                        
+                        // Giới hạn khoảng cách camera
+                        targetCameraRadius = Math.max(1, Math.min(20, targetCameraRadius));
+                    }
+                    
+                    lastTouchDistance = currentDistance;
+                    resetMouseActivity();
+                }
+            });
+
+            canvas.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                isTouchActive = false;
+                resetMouseActivity();
+            });
+
+            // Window resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Start animation loop
+            animate();
+            
+        }
+
+        function createBuilding() {
+            // Tạo group để chứa model và xoay quanh trọng tâm
+            modelGroup = new THREE.Group();
+            modelGroup.position.set(0, 0, 0); // Group ở gốc tọa độ
+            scene.add(modelGroup);
+            
+            // Load GLB model
+            const loader = new GLTFLoader();
+            loader.load('./tour360/L9_12B_low.glb', (gltf) => {
+                model = gltf.scene;
+                
+                // Tính toán bounding box để đặt model ở trung tâm
+                const box = new THREE.Box3().setFromObject(model);
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                
+                // Điều chỉnh kích thước và vị trí model trong group
+                model.scale.set(0.01, 0.01, 0.01); // Phóng to model
+                model.position.set(-center.x * 0.01, -center.y * 0.01, -center.z * 0.01); // Đặt model ở trung tâm
+                
+                // Thêm model vào group thay vì scene
+                modelGroup.add(model);
+                status.textContent = 'Model đã sẵn sàng';
+            }, (progress) => {
+                status.textContent = 'Đang tải model... ' + Math.round(progress.loaded / progress.total * 100) + '%';
+            }, (error) => {
+                console.error('Error loading GLB:', error);
+                status.textContent = 'Lỗi tải model';
+                
+                // Fallback: tạo hình vuông đỏ nếu không load được
+                model = new THREE.Mesh(
+                    new THREE.BoxGeometry(2, 2, 2),
+                    new THREE.MeshBasicMaterial({ color: 0xFF0000 })
+                );
+                model.position.set(0, 0, 0); // Đặt ở trung tâm
+                modelGroup.add(model);
+                console.log('Fallback: Red cube added');
+            });
+            
+            // Tạo sphere background lớn với texture alma.jpg
+            const textureLoader = new THREE.TextureLoader();
+            const texture = textureLoader.load('./tour360/alma.jpg');
+            
+            backgroundSphere = new THREE.Mesh(
+                new THREE.SphereGeometry(50, 32, 32),
+                new THREE.MeshBasicMaterial({ 
+                    map: texture,
+                    side: THREE.BackSide // Hiển thị mặt trong
+                })
+            );
+            backgroundSphere.position.set(0, 0, 0);
+            scene.add(backgroundSphere);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Check for auto rotate activation
+            const currentTime = Date.now();
+            if (currentTime - lastMouseActivity > autoRotateDelay && !isAutoRotating) {
+                isAutoRotating = true;
+                console.log('Auto rotate activated');
+            }
+            
+            // Auto rotate logic
+            if (isAutoRotating) {
+                targetRotationY -= autoRotateSpeed; // Quay chậm theo trục Y (cùng hướng với mouse)
+                // Không auto rotate theo X để tránh camera jumping
+            }
+            
+            // Smooth rotation - tăng tốc độ để phản hồi nhanh hơn
+            // Tăng tốc độ khi gần giới hạn để tránh camera bị "kẹt"
+            const xSpeed = (Math.abs(rotationX) > Math.PI/3) ? 0.2 : 0.1;
+            rotationX += (targetRotationX - rotationX) * xSpeed;
+            rotationY += (targetRotationY - rotationY) * 0.15; // Tăng tốc độ cho Y-axis
+            
+            // Debug: Log rotation values (có thể xóa sau)
+            if (Math.abs(targetRotationY) > 0.1 || Math.abs(targetRotationX) > 0.1) {
+                console.log('X:', rotationX.toFixed(3), 'Y:', rotationY.toFixed(3), 'targetX:', targetRotationX.toFixed(3), 'targetY:', targetRotationY.toFixed(3));
+            }
+            
+            // Smooth zoom interpolation
+            cameraRadius += (targetCameraRadius - cameraRadius) * 0.08; // Mượt mà hơn
+            
+            // Tính toán vị trí camera theo quỹ đạo tròn xung quanh mô hình
+            const modelPosition = new THREE.Vector3(0, 0, 0); // Vị trí mô hình ở trung tâm
+            
+            // Camera orbit controls - tránh camera flipping
+            // Tính toán vị trí camera theo spherical coordinates
+            const spherical = new THREE.Spherical();
+            spherical.radius = cameraRadius;
+            spherical.theta = rotationY; // Azimuth (xoay ngang)
+            spherical.phi = Math.PI/2 + rotationX; // Polar (lên/xuống) - bắt đầu từ mặt phẳng ngang
+            
+            // Giới hạn phi lỏng hơn để tránh camera flip nhưng vẫn linh hoạt
+            const originalPhi = spherical.phi;
+            spherical.phi = Math.max(0.05, Math.min(Math.PI - 0.05, spherical.phi));
+            
+            // Nếu phi bị giới hạn, điều chỉnh rotationX để camera không bị "kẹt"
+            if (originalPhi !== spherical.phi) {
+                if (spherical.phi <= 0.05) {
+                    // Camera ở gần đỉnh, điều chỉnh rotationX
+                    rotationX = -Math.PI/2 + 0.05;
+                } else if (spherical.phi >= Math.PI - 0.05) {
+                    // Camera ở gần đáy, điều chỉnh rotationX
+                    rotationX = Math.PI/2 - 0.05;
+                }
+                targetRotationX = rotationX; // Đồng bộ target
+            }
+            
+            // Chuyển về Cartesian coordinates
+            const cameraPosition = new THREE.Vector3();
+            cameraPosition.setFromSpherical(spherical);
+            
+            // Đặt camera ở vị trí tính toán
+            camera.position.copy(cameraPosition);
+            camera.position.add(modelPosition);
+            camera.position.y += 0.5; // Offset Y
+            
+            // Camera luôn nhìn vào mô hình
+            camera.lookAt(modelPosition);
+            
+            // Render 3D scene
+            renderer.render(scene, camera);
+            
+            // Overlay video
+            if (isCameraActive && video.videoWidth > 0) {
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            }
+        }
+        
+        init();
+    </script>
+</body>
+</html>

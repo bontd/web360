@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scroll Canvas Sequence</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.9.0/slick.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.9.0/slick-theme.css">
+  <link rel="stylesheet" href="./css/animation.css">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Canvas container */
+    .canvas-container {
+      position: relative;
+      width: 100%;
+      height: 400vh;
+    }
+
+    .canvas-wrapper {
+      width: 100%;
+      height: var(--window-height, 100vh);
+      position: sticky;
+      top: 0;
+      left: 0;
+    }
+
+    /* canvas {
+      width: 100%;
+      height: 100vh;
+      object-fit: cover;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+      will-change: transform;
+    } */
+
+    .section-bg {
+      background-image: url('./images/bg.png');
+      background-size: 100% 100%;
+      background-position: top;
+      background-repeat: no-repeat;
+    }
+
+    /* Section chứa nội dung để scroll */
+    .main-section {
+      height: 100vh; /* tăng chiều cao để có đủ scroll */
+      position: relative;
+      z-index: 0;
+    }
+
+    .second-section {
+      height: 500vh; /* tăng chiều cao để có đủ scroll */
+      position: relative;
+      z-index: 0;
+    }
+
+    /* Tiêu đề overlay */
+    .title {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translate(-50%, 0);
+      font-size: 3rem;
+      font-family: sans-serif;
+      color: white;
+      z-index: 2;
+      /* opacity: 0; */
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    }
+    .d-flex {
+      display: flex;
+    }
+    .whirlpool {
+      position: relative;
+      width: 400px;
+      height: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .whirlpool .bg {
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      overflow: hidden;
+      transition: .3s ease-in-out;
+    }
+    .whirlpool .bg img {
+      width: 250px;
+      height: 250px;
+      object-fit: cover;
+      opacity: 0;
+      transition: .3s ease-in-out;
+    }
+    .whirlpool .mask {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 300px;
+      height: 300px;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -50%) rotate(45deg);
+      transition: .3s ease-in-out;
+    }
+
+    .whirlpool:hover .bg {
+      width: 200px;
+      height: 200px;
+    }
+
+    .whirlpool:hover .bg img {
+      opacity: 1;
+    }
+
+    .whirlpool:hover .mask {
+      opacity: 1;
+      width: 490px;
+      height: 490px;
+      transform: translate(-50%, -50%) rotate(0deg);
+    }
+    .horizontal {
+      width: 100%;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .map {
+      width: 100%;
+      height: calc(100vh + 200px);
+      position: relative;
+      background-position: top;
+      z-index: 1;
+    }
+    .map img {
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <!-- <div class="canvas-container">
+    <div class="canvas-wrapper">
+      <canvas id="hero-canvas"></canvas>
+    </div>
+  </div> -->
+  
+  <div id="smooth-wrapper">
+    <div id="smooth-content">
+      <div class="section-bg animated-ripples">
+        
+        <section class="map">
+            <img src="./images/map.png" class="map-img" alt="map">
+        </section>
+      
+        <section class="main-section">
+          <div class="title"><img src="./images/tau-cao-toc-2.png" alt="Du thuyền" class="title-image"></div>
+          <div class="d-flex horizontal">
+            <div class="whirlpool">
+              <div class="bg">
+                <img src="./images/tau.png" alt="background">
+              </div>
+              <img src="./images/xoay-nuoc.svg" class="mask" alt="">
+            </div>
+            <div class="whirlpool">
+              <div class="bg">
+                <img src="./images/tau.png" alt="background">
+              </div>
+              <img src="./images/xoay-nuoc.svg" class="mask" alt="">
+            </div>
+          </div>    
+        </section>
+      </div>
+      <section class="section-slide">
+        <div class="slider-for">
+          <div><img src="./images/slide-01.png" /></div>
+          <div><img src="./images/slide-02.jpg" /></div>
+          <div><img src="./images/slide-03.jpg" /></div>
+        </div>
+      
+        <div class="slider-nav">
+          <div><img src="./images/slide-02.jpg" /></div>
+          <div><img src="./images/slide-03.jpg" /></div>
+          <div><img src="./images/slide-01.png" /></div>
+        </div>
+      </section>
+      <section class="custom-slider">
+        <div class="slider-grid">
+          <div class="big-slide">
+            <img src="images/slide-01.png" alt="Slide 1">
+          </div>
+          <div class="small-slides">
+            <div>
+              <img src="images/slide-02.png" alt="Slide 2">
+            </div>
+            <div>
+              <img src="images/slide-03.png" alt="Slide 3">
+            </div>
+          </div>
+        </div>
+      
+        <div class="controls">
+          <button id="prevBtn">←</button>
+          <button id="nextBtn">→</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="./js/gsap.min.js"></script>
+  <script src="./js/ScrollTrigger.min.js"></script>
+  <script src="./js/ScrollSmoother.min.js"></script>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+  <script src="./js/jquery.ripples.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/slick-carousel@1.8.1/slick/slick.min.js"></script>
+
+  <script>
+    $(document).ready(function () {
+  const $main = $('.slider-for');
+  const $thumb = $('.slider-nav');
+
+  $main.slick({
+    slidesToShow: 1,
+    slidesToScroll: 1,
+    arrows: false,
+    dots: false,
+    infinite: true,
+    speed: 700,
+    draggable: false,
+    swipe: false,
+    touchMove: false,
+    focusOnSelect: false, 
+  });
+
+  $thumb.slick({
+    slidesToShow: 2,
+    slidesToScroll: 1,
+    arrows: true,
+    infinite: true,
+  });
+
+  const totalSlides = $main.slick('getSlick').slideCount;
+
+  // Khi khởi tạo -> ẩn slide đầu tiên trong thumbnail
+  $thumb.on('init', function (event, slick) {
+    $(slick.$slides.get(0)).addClass('hidden-thumb');
+  });
+
+  // Cập nhật thumbnail khi main thay đổi
+  $thumb.on('beforeChange', function (event, slick, currentSlide, nextStart) {
+    $main.slick('slickGoTo', nextStart, false);
+
+    // Reset thumbnail ẩn
+    $main.find('.slick-slide').removeClass('hidden-thumb');
+    // Ẩn lại ảnh trùng với main
+    $main.find(`.slick-slide[data-slick-index="${currentSlide}"]`).addClass('hidden-thumb');
+  });
+
+  const images = [
+  "images/slide-01.png",
+  "images/slide-02.jpg",
+  "images/slide-03.jpg",
+];
+
+let index = 0;
+
+const bigSlide = document.querySelector('.big-slide img');
+const smallImgs = document.querySelectorAll('.small-slides img');
+const nextBtn = document.getElementById('nextBtn');
+const prevBtn = document.getElementById('prevBtn');
+
+function updateSlides() {
+  bigSlide.src = images[index % images.length];
+  smallImgs[0].src = images[(index + 1) % images.length];
+  smallImgs[1].src = images[(index + 2) % images.length];
+}
+
+function nextSlide() {
+  bigSlide.classList.add('slide-out');
+  smallImgs[0].classList.add('slide-up');
+  smallImgs[1].classList.add('slide-in');
+
+  setTimeout(() => {
+    bigSlide.classList.remove('slide-out');
+    smallImgs[0].classList.remove('slide-up');
+    smallImgs[1].classList.remove('slide-in');
+
+    index = (index + 1) % images.length;
+    updateSlides();
+  }, 900);
+}
+
+function prevSlide() {
+  index = (index - 1 + images.length) % images.length;
+  updateSlides();
+}
+
+nextBtn.addEventListener('click', nextSlide);
+prevBtn.addEventListener('click', prevSlide);
+
+updateSlides();
+
+});
+
+
+
+    gsap.registerPlugin(ScrollTrigger);
+
+    ScrollSmoother.create({
+      wrapper: "#smooth-wrapper",
+      content: "#smooth-content",
+      smooth: 2, // tốc độ mượt (1 = nhanh, 3 = chậm hơn)
+      effects: true, // cho phép animate khi scroll
+    });
+
+    // const canvas = document.getElementById("hero-canvas");
+    // const context = canvas.getContext("2d");
+
+    // function resizeCanvas() {
+    //   canvas.width = window.innerWidth;
+    //   canvas.height = window.innerHeight;
+    // }
+    
+    // resizeCanvas();
+    // window.addEventListener('resize', resizeCanvas);
+
+    // const frameCount = 130;
+    // const images = [];
+    // let loadedImages = 0;
+    
+    // const currentFrame = (i) =>
+    //   `./images/VILLAS_IN_MARBELLA_Cam_09_v10_${String(i).padStart(5, "0")}.webp`;
+
+    // for (let i = 0; i < frameCount; i++) {
+    //   const img = new Image();
+    //   img.crossOrigin = "anonymous";
+    //   img.onload = () => {
+    //     loadedImages++;
+    //     if (loadedImages === frameCount) {
+    //       console.log("All images loaded, initializing ScrollTrigger");
+    //       initScrollTrigger();
+    //     }
+    //   };
+    //   img.onerror = () => {
+    //     console.warn(`Failed to load image ${i}`);
+    //     loadedImages++;
+    //     if (loadedImages === frameCount) {
+    //       initScrollTrigger();
+    //     }
+    //   };
+    //   img.src = currentFrame(i);
+    //   images.push(img);
+    // }    
+    
+    // setTimeout(() => {
+    //   if (loadedImages < frameCount) {
+    //     initScrollTrigger();
+    //   }
+    // }, 3000);
+
+    // let currentFrameIndex = 0;
+    // let targetFrameIndex = 0;
+
+    initScrollTrigger();
+
+    const $main = $(".animated-ripples");
+
+    // Khởi tạo hiệu ứng nước
+    $main.ripples({
+      resolution: 512,
+      dropRadius: 30,     // bán kính gợn
+      perturbance: 0.01,  // độ nhiễu nhẹ
+    });
+
+    // 🧩 Tắt tương tác chuột
+    // (Nếu plugin mặc định vẫn bắt sự kiện chuột)
+    $main.off("mousemove");
+    $main.off("mousedown");
+    $main.off("touchmove");
+    $main.off("touchstart");
+
+    // ⚙️ Hai vị trí sóng cố định (ví dụ: trái & phải)
+    const drops = [
+      { x: $main.outerWidth() / 2, y: 100 }, // bên trái giữa
+      // { x: $main.outerWidth() * 0.7, y: $main.outerHeight() * 0.5 }  // bên phải giữa
+    ];
+
+    // ⏱️ Mỗi 10 giây tạo 1 đợt sóng ở 2 vị trí đó
+    setInterval(() => {
+      drops.forEach(pos => {
+        $main.ripples('drop', pos.x, pos.y, 40, 0.04);
+      });
+    }, 1000);
+
+    function drawLoop() {
+      if (currentFrameIndex !== targetFrameIndex) {
+        const nextIndex = currentFrameIndex < targetFrameIndex
+          ? currentFrameIndex + 1
+          : currentFrameIndex - 1;
+
+        const img = images[nextIndex];
+        if (img && img.complete && img.naturalWidth > 0) {
+          context.imageSmoothingEnabled = true;
+          context.imageSmoothingQuality = 'high';
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(img, 0, 0, canvas.width, canvas.height);
+          currentFrameIndex = nextIndex;
+        }
+      }
+
+      requestAnimationFrame(drawLoop);
+    }
+
+    function initScrollTrigger() {
+      // const scrollObj = { frame: 0 };
+      
+      // gsap.to(scrollObj, {
+      //   frame: frameCount - 1,
+      //   ease: "none",
+      //   scrollTrigger: {
+      //     trigger: ".canvas-container",
+      //     start: "top top",
+      //     end: "bottom bottom",
+      //     scrub: true,
+      //     onUpdate: () => {
+      //       const frameIndex = Math.round(scrollObj.frame);
+      //       if (frameIndex >= 0 && frameIndex < frameCount) {
+      //         targetFrameIndex = frameIndex;
+      //       }
+      //     }
+      //   },
+      // });
+
+      let currentRotation = 0;
+
+      gsap.to(".map-img", {
+        yPercent: -30,
+        xPercent: -20,
+        scale: 2.5,
+        ease: "power1.in",
+        scrollTrigger: {
+          trigger: ".map",
+          start: "top top",
+          end: "bottom bottom",
+          scrub: true,
+        },
+      });
+
+
+      gsap.to(".title", {
+        y: () => {
+          const section = document.querySelector(".main-section");
+          const title = document.querySelector(".title");
+          return section.offsetHeight - title.offsetHeight;
+        },
+        ease: "none",
+        scrollTrigger: {
+          trigger: ".main-section",
+          start: "top bottom",
+          end: "bottom top",
+          scrub: 4,
+          onUpdate: (self) => {
+            const direction = self.direction; // 1 = scroll down, -1 = scroll up
+            const title = document.querySelector(".title");
+
+            if (direction === 1 && currentRotation !== 0) {
+              // 🔹 Scroll xuống: ẩn → xoay → hiện lại
+              gsap.timeline()
+                .to(title, { opacity: 0, duration: 0.3, ease: "power1.out" })
+                .to(title, { rotate: 0, duration: 0.2, ease: "power2.inOut" })
+                .to(title, { opacity: 1, duration: 0.3, ease: "power1.in" });
+              currentRotation = 0;
+            } 
+            else if (direction === -1 && currentRotation !== 180) {
+              // 🔹 Scroll lên: ẩn → xoay → hiện lại
+              gsap.timeline()
+                .to(title, { opacity: 0, duration: 0.3, ease: "power1.out" })
+                .to(title, { rotate: 180, duration: 0.2, ease: "power2.inOut" })
+                .to(title, { opacity: 1, duration: 0.3, ease: "power1.in" });
+              currentRotation = 180;
+            }
+          },
+        },
+      });
+
+      targetFrameIndex = 0;
+      currentFrameIndex = -1;
+      // drawLoop();
+      
+      console.log("ScrollTrigger initialized successfully");
+    }
+  </script>
+</body>
+</html>

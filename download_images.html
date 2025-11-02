@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Images</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .progress {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #28a745;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        .status {
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .log {
+            max-height: 300px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Download VILLAS_IN_MARBELLA Sequence Images</h1>
+        <p>Download tất cả ảnh từ 00000.webp đến 00355.webp (bước nhảy 5)</p>
+        
+        <button id="downloadBtn" onclick="startDownload()">Bắt đầu Download</button>
+        <button id="stopBtn" onclick="stopDownload()" disabled>Dừng</button>
+        
+        <div class="progress">
+            <div class="status" id="status">Sẵn sàng để download</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div id="progressText">0 / 72</div>
+        </div>
+        
+        <div class="log" id="log"></div>
+    </div>
+
+    <script>
+        let isDownloading = false;
+        let downloadCount = 0;
+        let totalImages = 72; // 0, 5, 10, ..., 350, 355 = 72 ảnh
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateProgress(current, total) {
+            const percentage = (current / total) * 100;
+            document.getElementById('progressFill').style.width = percentage + '%';
+            document.getElementById('progressText').textContent = `${current} / ${total}`;
+        }
+        
+        async function downloadImage(frameNum) {
+            const frameStr = frameNum.toString().padStart(5, '0');
+            const url = `https://horizonte-village.com/images/main/sequence/VILLAS_IN_MARBELLA_Cam_09_v10_${frameStr}.webp`;
+            
+            try {
+                log(`Downloading frame ${frameStr}...`);
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                
+                // Tạo link download
+                const downloadUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = `VILLAS_IN_MARBELLA_Cam_09_v10_${frameStr}.webp`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(downloadUrl);
+                
+                log(`✓ Downloaded frame ${frameStr} (${(blob.size / 1024).toFixed(1)} KB)`);
+                return true;
+                
+            } catch (error) {
+                log(`✗ Failed to download frame ${frameStr}: ${error.message}`);
+                return false;
+            }
+        }
+        
+        async function startDownload() {
+            if (isDownloading) return;
+            
+            isDownloading = true;
+            downloadCount = 0;
+            
+            document.getElementById('downloadBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('status').textContent = 'Đang download...';
+            
+            log('=== Bắt đầu download ===');
+            
+            // Tạo danh sách frame numbers (0, 5, 10, ..., 350, 355)
+            const frameNumbers = [];
+            for (let i = 0; i <= 355; i += 5) {
+                frameNumbers.push(i);
+            }
+            
+            let successCount = 0;
+            let failedCount = 0;
+            
+            for (let i = 0; i < frameNumbers.length && isDownloading; i++) {
+                const frameNum = frameNumbers[i];
+                updateProgress(i + 1, frameNumbers.length);
+                
+                const success = await downloadImage(frameNum);
+                if (success) {
+                    successCount++;
+                } else {
+                    failedCount++;
+                }
+                
+                downloadCount++;
+                
+                // Delay để tránh spam server
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+            
+            if (isDownloading) {
+                log(`=== Download hoàn thành ===`);
+                log(`Thành công: ${successCount}`);
+                log(`Thất bại: ${failedCount}`);
+                log(`Tổng cộng: ${frameNumbers.length}`);
+            } else {
+                log('=== Download bị dừng ===');
+            }
+            
+            isDownloading = false;
+            document.getElementById('downloadBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('status').textContent = 'Hoàn thành';
+        }
+        
+        function stopDownload() {
+            isDownloading = false;
+            document.getElementById('downloadBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('status').textContent = 'Đã dừng';
+            log('Download đã được dừng');
+        }
+    </script>
+</body>
+</html>

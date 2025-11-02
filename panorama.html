@@ -1,0 +1,260 @@
+<head>
+    <!-- for optimal display on high DPI devices -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@photo-sphere-viewer/core/index.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@photo-sphere-viewer/markers-plugin/index.min.css" />
+    <style>
+        /* Style cho markers 3D */
+        .psv-marker {
+            cursor: pointer;
+        }
+
+        .panorama-marker {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .panorama-marker:hover {
+            background: rgba(74, 144, 226, 0.9);
+            border-color: rgba(255, 255, 255, 0.8);
+            transform: scale(1.1);
+            box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+        }
+
+        .panorama-marker.active {
+            background: rgba(74, 144, 226, 0.9);
+            border-color: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.5);
+        }
+
+        /* Tooltip cho markers */
+        .marker-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        .marker-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: rgba(0, 0, 0, 0.9);
+        }
+
+        .psv-marker:hover .marker-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Ẩn controls cũ */
+        .panorama-controls {
+            display: none;
+        }
+    </style>
+</head>
+
+<!-- the viewer container must have a defined size -->
+<div id="viewer" style="width: calc(100vw - 20px); height: calc(100vh - 20px);"></div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three/build/three.module.js",
+            "@photo-sphere-viewer/core": "https://cdn.jsdelivr.net/npm/@photo-sphere-viewer/core/index.module.js",
+            "@photo-sphere-viewer/markers-plugin": "https://cdn.jsdelivr.net/npm/@photo-sphere-viewer/markers-plugin/index.module.js"
+        }
+    }
+</script>
+
+<script type="module">
+    import { Viewer } from '@photo-sphere-viewer/core';
+    import { MarkersPlugin } from '@photo-sphere-viewer/markers-plugin';
+
+    // Danh sách các panorama có sẵn
+    const panoramas = {
+        'alma.jpg': {
+            url: 'https://pannellum.org/images/alma.jpg',
+            panoData: {
+                fullWidth: 4090,
+                fullHeight: 2000,
+                croppedWidth: 4090,
+                croppedHeight: 2000,
+                croppedX: 0,
+                croppedY: 0
+            }
+        },
+        'bma-1.jpg': {
+            url: './tour360/bma-1.jpg',
+            panoData: {
+                fullWidth: 4090,
+                fullHeight: 2000,
+                croppedWidth: 4090,
+                croppedHeight: 2000,
+                croppedX: 0,
+                croppedY: 0
+            }
+        },
+        'hawaii-beach.jpg': {
+            url: './tour360/hawaii-beach.jpg',
+            panoData: {
+                fullWidth: 1090,
+                fullHeight: 500,
+                croppedWidth: 1090,
+                croppedHeight: 500,
+                croppedX: 0,
+                croppedY: 0
+            }
+        }
+    };
+
+    let currentPanorama = 'alma.jpg';
+    let markersPlugin;
+
+    const viewer = new Viewer({
+        container: document.querySelector('#viewer'),
+        panorama: panoramas[currentPanorama].url,
+        defaultYaw: 0,
+        defaultPitch: 0,
+        defaultZoomLvl: 50,
+        minFov: 20,
+        maxFov: 90,
+        navbar: false,
+        touchmoveTwoFingers: true,
+        mousewheel: true,
+        panoData: panoramas[currentPanorama].panoData,
+        plugins: [
+            [MarkersPlugin, {
+                markers: []
+            }]
+        ]
+    });
+
+    // Lấy plugin markers
+    markersPlugin = viewer.getPlugin(MarkersPlugin);
+
+    // Tạo markers cho panorama hiện tại
+    function createMarkers() {
+        const allMarkers = [
+            {
+                id: 'alma-marker',
+                panorama: 'alma.jpg',
+                position: { yaw: -Math.PI/4, pitch: 0 },
+                html: `
+                    <div class="panorama-marker">
+                        <div class="marker-tooltip">Xem cảnh Alma</div>
+                        A
+                    </div>
+                `,
+                anchor: 'center center',
+                size: { width: 60, height: 60 }
+            },
+            {
+                id: 'bma-marker',
+                panorama: 'bma-1.jpg',
+                position: { yaw: 0, pitch: 0 },
+                html: `
+                    <div class="panorama-marker">
+                        <div class="marker-tooltip">Xem cảnh BMA</div>
+                        B
+                    </div>
+                `,
+                anchor: 'center center',
+                size: { width: 60, height: 60 }
+            },
+            {
+                id: 'hawaii-marker',
+                panorama: 'hawaii-beach.jpg',
+                position: { yaw: Math.PI/4, pitch: 0 },
+                html: `
+                    <div class="panorama-marker">
+                        <div class="marker-tooltip">Xem cảnh Hawaii Beach</div>
+                        H
+                    </div>
+                `,
+                anchor: 'center center',
+                size: { width: 60, height: 60 }
+            }
+        ];
+
+        // Chỉ hiển thị markers của các panorama khác, không hiển thị marker của panorama hiện tại
+        const markers = allMarkers.filter(marker => marker.panorama !== currentPanorama);
+
+        // Xóa markers cũ
+        markersPlugin.clearMarkers();
+
+        // Thêm markers mới
+        markers.forEach(marker => {
+            markersPlugin.addMarker(marker);
+        });
+
+        // Thêm event listener cho markers
+        markersPlugin.addEventListener('select-marker', (e) => {
+            const marker = e.marker;
+            const panoramaFile = marker.config.panorama;
+            
+            if (panoramaFile && panoramaFile !== currentPanorama) {
+                switchPanorama(panoramaFile);
+            }
+        });
+    }
+
+    // Hàm chuyển đổi panorama
+    function switchPanorama(panoramaFile) {
+        const panoramaData = panoramas[panoramaFile];
+        
+        if (panoramaData) {
+            currentPanorama = panoramaFile;
+            
+            // Cập nhật panorama
+            viewer.setPanorama(panoramaData.url, {
+                panoData: panoramaData.panoData
+            });
+
+            // Tạo lại markers với trạng thái active mới
+            setTimeout(() => {
+                createMarkers();
+            }, 100);
+
+            console.log(`Đã chuyển sang cảnh: ${panoramaFile}`);
+        }
+    }
+
+    // Khởi tạo markers khi panorama được tải
+    viewer.addEventListener('panorama-loaded', () => {
+        createMarkers();
+        console.log('Panorama đã được tải thành công!');
+    });
+
+    // Khởi tạo markers ban đầu
+    createMarkers();
+</script>
